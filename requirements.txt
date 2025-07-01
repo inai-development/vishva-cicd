@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+aiosqlite
+python-dotenv
+openai
+edge-tts
+pydantic
+python-socketio
