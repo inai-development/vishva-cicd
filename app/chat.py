@@ -1,4 +1,5 @@
 from openai import OpenAI
+import re
 
 class ChatManager:
     def __init__(self, config, modes, database, logger):
@@ -29,7 +30,7 @@ class ChatManager:
             if not reply:
                 reply = "I'm sorry, I couldn't think of a good answer."
 
-            reply = reply.strip()
+            reply = re.sub(r"\*[^*]+\*", "", reply).strip()
             history.append({"role": "assistant", "content": reply})
 
             await self.database.save_message(user_id, mode, "user", message)
