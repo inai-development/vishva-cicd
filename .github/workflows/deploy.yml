@@ -26,4 +26,4 @@ jobs:
           docker build -t inai_backend .
           docker stop inai_backend || true
           docker rm inai_backend || true
-          docker run -d --name inai_backend -p 8000:8000 --env-file .env inai_backend
+          docker run -d --name inai_backend -p 8025:8025 --env-file .env inai_backend
