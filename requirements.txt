@@ -1,8 +1,9 @@
 fastapi
 uvicorn
+python-socketio
+edge-tts
+pydub
+SpeechRecognition
 aiosqlite
 python-dotenv
 openai
-edge-tts
-pydantic
-python-socketio

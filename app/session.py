@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 
 class UserSessionManager:
@@ -9,7 +9,7 @@ class UserSessionManager:
         self.active_tasks: Dict[str, set] = {}
         self.logger = logger
 
-    def create_user_session(self, user_id: str, sid: str):
+    def create_user_session(self, user_id: str, sid: str, endpoint: Optional[str] = None):
         self.user_sessions[user_id] = {
             'sid': sid,
             'current_mode': 'friend',
@@ -17,9 +17,21 @@ class UserSessionManager:
             'active_tts_task': None,
             'is_speaking': False,
             'current_audio': None,
-            'created_at': time.time()
+            'created_at': time.time(),
+            'endpoint': endpoint or "default"
         }
         self.active_tasks[user_id] = set()
+        self.logger.info(f"Created session for {user_id} with endpoint: {self.user_sessions[user_id]['endpoint']}")
+
+    def set_user_endpoint(self, user_id: str, endpoint: str):
+        session = self.get_user_session(user_id)
+        if session:
+            session["endpoint"] = endpoint
+            self.logger.info(f"Updated endpoint for {user_id} to {endpoint}")
+
+    def get_user_endpoint(self, user_id: str) -> Optional[str]:
+        session = self.get_user_session(user_id)
+        return session.get("endpoint") if session else None
 
     def get_user_session(self, user_id: str):
         return self.user_sessions.get(user_id)
@@ -58,3 +70,21 @@ class UserSessionManager:
             self.user_sessions[user_id]['is_speaking'] = False
             self.user_sessions[user_id]['current_audio'] = None
             self.logger.info(f"Stopped TTS for user: {user_id}")
+
+
+    def get_all_sids(self):
+        return [
+            session["sid"]
+            for session in self.user_sessions.values()
+            if "sid" in session
+        ]
+        
+    def clear_all_sessions(self):
+        # Cancel all running tasks
+        for user_id in list(self.active_tasks.keys()):
+            self.cancel_user_tasks(user_id)
+    
+        # Clear all sessions
+        self.user_sessions.clear()
+        self.active_tasks.clear()
+        self.logger.info("✅ Cleared all user sessions and active tasks.")
