@@ -45,7 +45,6 @@ class INAIApplication:
 
         self.setup_routes()
 
-        # Socket setup only if config allows
         if self.config.is_socket_on():
             self.setup_socket_events()
         else:
@@ -57,89 +56,72 @@ class INAIApplication:
 
         @self.app.get("/chat", response_class=HTMLResponse)
         async def index():
-            # Try serving from frontend_dir
             frontend_index = os.path.join(frontend_dir, "index.html")
             if os.path.exists(frontend_index):
                 return FileResponse(frontend_index)
-
-            # Fallback to static_dir
             try:
                 with open(os.path.join(self.config.static_dir, "index.html"), "r", encoding='utf-8') as f:
                     return HTMLResponse(content=f.read())
             except FileNotFoundError:
                 return HTMLResponse(content="<h1>UI not found</h1>", status_code=404)
 
+        @self.app.get("/status")
+        async def get_status():
+            self.config.reload_env()
+            return {
+                "maintenance": self.config.is_maintenance_on(),
+                "socket": self.config.is_socket_on()
+            }
 
-            @self.app.get("/status")
-            async def get_status():
-                self.config.reload_env()
-                return {
-                    "maintenance": self.config.is_maintenance_on(),
-                    "socket": self.config.is_socket_on()
-                }
-                
-            @self.app.get("/admin", response_class=FileResponse)
-            async def admin_panel():
-                return FileResponse(os.path.join("templates", "admin.html"))
+        @self.app.get("/admin", response_class=HTMLResponse)
+        async def admin_panel(request: Request):
+            return self.templates.TemplateResponse("admin.html", {"request": request})
 
+        @self.app.get("/monitor", response_class=HTMLResponse)
+        async def monitor_ui(request: Request):
+            usage, sessions = get_monitor_data()
+            return self.templates.TemplateResponse("monitor.html", {
+                "request": request,
+                "key_usage": usage,
+                "user_sessions": sessions
+            })
 
-            @self.app.post("/assign-key")
-            async def assign_key(request: Request):
-                data = await request.json()
-                user_id = data.get("user_id")
-                task = data.get("task", "Unknown")
-                return assign_key_to_user(user_id, task)
+        @self.app.post("/assign-key")
+        async def assign_key(request: Request):
+            data = await request.json()
+            user_id = data.get("user_id")
+            task = data.get("task", "Unknown")
+            return assign_key_to_user(user_id, task)
 
-            @self.app.post("/release-key")
-            async def release_key(request: Request):
-                data = await request.json()
-                user_id = data.get("user_id")
-                return release_key_for_user(user_id)
+        @self.app.post("/release-key")
+        async def release_key(request: Request):
+            data = await request.json()
+            user_id = data.get("user_id")
+            return release_key_for_user(user_id)
 
-            @self.app.get("/monitor", response_class=HTMLResponse)
-            async def monitor_ui(request: Request):
-                usage, sessions = get_monitor_data()
-                return self.templates.TemplateResponse("monitor.html", {
-                    "request": request,
-                    "key_usage": usage,
-                    "user_sessions": sessions
-                })
+        @self.app.post("/login")
+        async def login(req: ToggleRequest):
+            if req.password != os.getenv("TOGGLE_PASSWORD"):
+                raise HTTPException(status_code=403, detail="❌ Invalid password")
+            return {
+                "maintenance": self.config.is_maintenance_on(),
+                "socket": self.config.is_socket_on()
+            }
 
-            
-            @self.app.post("/login")
-            async def login(req: ToggleRequest):
-                if req.password != os.getenv("TOGGLE_PASSWORD"):
-                    raise HTTPException(status_code=403, detail="❌ Invalid password")
-                return {
-                    "maintenance": self.config.is_maintenance_on(),
-                    "socket": self.config.is_socket_on()
-                }
-
-            @self.app.post("/toggle")
-            async def toggle(req: ToggleRequest):
-                if not self.config.toggle_state(req.password):
-                    raise HTTPException(status_code=403, detail="❌ Invalid password")
-
-                await self.disconnect_all_users()
-
-                if self.config.is_socket_on():
-                    self.setup_socket_events()
-                    self.logger.info("✅ Socket events re-enabled after maintenance OFF")
-
-                mode = "MAINTENANCE" if self.config.is_maintenance_on() else "NORMAL"
-                return {
-                    "message": f"🔁 Mode switched to {mode}",
-                    "maintenance": self.config.is_maintenance_on(),
-                    "socket": self.config.is_socket_on()
-                }
-
-
-            def get_all_sids(self):
-                return [
-                    session["sid"] 
-                    for session in self.user_sessions.values() 
-                    if "sid" in session
-                    ]
+        @self.app.post("/toggle")
+        async def toggle(req: ToggleRequest):
+            if not self.config.toggle_state(req.password):
+                raise HTTPException(status_code=403, detail="❌ Invalid password")
+            await self.disconnect_all_users()
+            if self.config.is_socket_on():
+                self.setup_socket_events()
+                self.logger.info("✅ Socket events re-enabled after maintenance OFF")
+            mode = "MAINTENANCE" if self.config.is_maintenance_on() else "NORMAL"
+            return {
+                "message": f"🔁 Mode switched to {mode}",
+                "maintenance": self.config.is_maintenance_on(),
+                "socket": self.config.is_socket_on()
+            }
 
     async def disconnect_all_users(self):
         for sid in list(self.session_manager.get_all_sids()):
@@ -276,15 +258,12 @@ class INAIApplication:
         try:
             chunks = self.tts.split_into_sentence_chunks(response, max_sentences_per_chunk=2)
             await self.sio.emit("streaming_status", {"can_stop": True}, room=sid)
-
             for i, chunk in enumerate(chunks):
                 if asyncio.current_task().cancelled():
                     break
-
                 session = self.session_manager.get_user_session(user_id)
                 if not session:
                     break
-
                 audio_data = await self.tts.generate_tts_chunk(chunk, i)
                 if audio_data:
                     await self.sio.emit("streaming_audio", {
@@ -294,7 +273,6 @@ class INAIApplication:
                         "is_final": i == len(chunks) - 1
                     }, room=sid)
                     await asyncio.sleep(1.5)
-
             await self.sio.emit("streaming_status", {"can_stop": False}, room=sid)
         except Exception as e:
             self.logger.error(f"Streaming error for {user_id}: {e}")
