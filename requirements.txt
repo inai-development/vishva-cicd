@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-socketio
+edge-tts
+pydub
+SpeechRecognition
+aiosqlite
+python-dotenv
+openai
+jinja2
