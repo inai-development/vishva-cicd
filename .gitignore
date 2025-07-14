@@ -1,5 +1,12 @@
 venv/
 chat_history.db
 
+<<<<<<< HEAD
 __pycache__
 
+=======
+
+__pycache__/
+*.pyc
+*.db
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d

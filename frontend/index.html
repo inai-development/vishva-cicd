@@ -11,6 +11,7 @@
       padding: 0;
     }
 
+<<<<<<< HEAD
     #usernamePrompt {
       position: fixed;
       inset: 0;
@@ -41,6 +42,8 @@
       cursor: pointer;
     }
 
+=======
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
     .chat-container {
       max-width: 600px;
       margin: 40px auto;
@@ -49,7 +52,10 @@
       padding: 20px 25px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.7);
       border: 1px solid #2e2e2e;
+<<<<<<< HEAD
       display: none; /* Initially hidden until username entered */
+=======
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
     }
 
     h1 {
@@ -71,6 +77,10 @@
       color: #bbb;
     }
 
+<<<<<<< HEAD
+=======
+    .input-row input,
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
     .input-row select {
       width: 100%;
       padding: 10px 12px;
@@ -82,6 +92,10 @@
       transition: 0.2s ease;
     }
 
+<<<<<<< HEAD
+=======
+    .input-row input:focus,
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
     .input-row select:focus {
       border-color: #00ccff;
       outline: none;
@@ -188,6 +202,7 @@
       padding-left: 20px;
     }
   </style>
+<<<<<<< HEAD
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
@@ -204,6 +219,20 @@
     <h1>INAI Chatbot</h1>
 
     <div class="input-row">
+=======
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="chat-container">
+    <h1>INAI Chatbot</h1>
+
+    <div class="input-row">
+      <label for="username">Username:</label>
+      <input type="text" id="username" placeholder="Enter your name" value="test_user" />
+    </div>
+
+    <div class="input-row">
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
       <label for="mode">Mode:</label>
       <select id="mode">
         <option value="friend">Friend</option>
@@ -219,14 +248,20 @@
 
     <div id="controls">
       <input type="text" id="messageInput" placeholder="Type or Speak..." />
+<<<<<<< HEAD
       <button id="sendBtn">Send</button>
       <button id="mic-btn">🎤</button>
+=======
+      <button id="sendBtn" onclick="sendMessage()">Send</button>
+      <button id="mic-btn" onclick="startVoice()">🎤</button>
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
     </div>
 
     <audio id="audioPlayer" hidden></audio>
   </div>
 
   <script>
+<<<<<<< HEAD
     let socket;
     let audioQueue = [];
     let isPlaying = false;
@@ -354,3 +389,168 @@
   </script>
 </body>
 </html>
+=======
+  let socket;
+  let audioQueue = [];
+  let isPlaying = false;
+
+  const chatHTML = `
+    <div class="chat-container">
+      <h1>INAI Chatbot</h1>
+      <div class="input-row">
+        <label for="username">Username:</label>
+        <input type="text" id="username" placeholder="Enter your name" value="test_user" />
+      </div>
+      <div class="input-row">
+        <label for="mode">Mode:</label>
+        <select id="mode">
+          <option value="friend">Friend</option>
+          <option value="info">Info</option>
+          <option value="elder">Elder</option>
+          <option value="love">Love</option>
+        </select>
+      </div>
+      <div id="chat-box">
+        <ul id="messages"></ul>
+      </div>
+      <div id="controls">
+        <input type="text" id="messageInput" placeholder="Type or Speak..." />
+        <button id="sendBtn">Send</button>
+        <button id="mic-btn">🎤</button>
+      </div>
+      <audio id="audioPlayer" hidden></audio>
+    </div>
+  `;
+
+  function initializeSocket() {
+    socket = io("http://13.203.101.205:8000", {
+      transports: ["websocket"]
+    });
+
+  // function initializeSocket() {
+  //   socket = io("http://192.168.1.93:8000", {
+  //     transports: ["websocket"]
+  //   });
+
+    socket.on("connect", () => {
+      console.log("✅ Connected:", socket.id);
+
+      if (!document.querySelector(".chat-container")) {
+        document.body.innerHTML = chatHTML;
+        bindEvents();
+      }
+
+      const username = document.getElementById("username").value.trim() || "test_user";
+      socket.emit("register_user", { username });
+    });
+
+    socket.on("disconnect", () => {
+      document.body.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;color:white;text-align:center;">
+          <h1 style="font-size:2em;color:#ffcc00;">🚧 INAI is under maintenance</h1>
+          <p style="font-size:1.2em;">Please try again later.</p>
+        </div>
+      `;
+    });
+
+    socket.on("response", (data) => {
+      const li = document.createElement("li");
+      li.innerHTML = "<b>AI:</b><br>" + formatBotMessage(data.text);
+      li.className = "bot";
+      document.getElementById("messages").appendChild(li);
+      document.getElementById("chat-box").scrollTop = document.getElementById("chat-box").scrollHeight;
+      if (data.audio) playAudio(data.audio);
+    });
+
+    socket.on("streaming_audio", (data) => {
+      if (data.audio) {
+        audioQueue.push("data:audio/wav;base64," + data.audio);
+        if (!isPlaying) playQueue();
+      }
+    });
+
+    socket.on("mode_change", (data) => {
+      document.getElementById("mode").value = data.mode;
+    });
+  }
+
+  function bindEvents() {
+    document.getElementById("sendBtn").onclick = sendMessage;
+    document.getElementById("mic-btn").onclick = startVoice;
+  }
+
+  function sendMessage() {
+    const input = document.getElementById("messageInput");
+    const username = document.getElementById("username").value.trim() || "test_user";
+    const mode = document.getElementById("mode").value;
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    const audioPlayer = document.getElementById("audioPlayer");
+    audioPlayer.pause();
+    audioPlayer.currentTime = 0;
+    isPlaying = false;
+    audioQueue = [];
+
+    socket.emit("user_message", { username, mode, text: msg });
+
+    const li = document.createElement("li");
+    li.textContent = "You: " + msg;
+    li.className = "user";
+    document.getElementById("messages").appendChild(li);
+    document.getElementById("chat-box").scrollTop = document.getElementById("chat-box").scrollHeight;
+    input.value = '';
+  }
+
+  function playAudio(audioBase64) {
+    const audioPlayer = document.getElementById("audioPlayer");
+    audioPlayer.src = "data:audio/wav;base64," + audioBase64;
+    audioPlayer.hidden = false;
+    audioPlayer.play();
+  }
+
+  function playQueue() {
+    if (audioQueue.length === 0) {
+      isPlaying = false;
+      return;
+    }
+    isPlaying = true;
+    const audioPlayer = document.getElementById("audioPlayer");
+    const nextAudio = audioQueue.shift();
+    audioPlayer.src = nextAudio;
+    audioPlayer.hidden = false;
+    audioPlayer.play();
+    audioPlayer.onended = () => playQueue();
+  }
+
+  function startVoice() {
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = "en-IN";
+    recognition.start();
+    recognition.onresult = (event) => {
+      const speech = event.results[0][0].transcript;
+      document.getElementById("messageInput").value = speech;
+      sendMessage();
+    };
+    recognition.onerror = (event) => {
+      console.error("Voice recognition error:", event.error);
+    };
+  }
+
+  function formatBotMessage(text) {
+    text = text.replace(/```([\s\S]*?)```/g, (_, code) => `<pre><code>${escapeHtml(code)}</code></pre>`);
+    text = text.replace(/^\s*\*\s(.+)$/gm, '<li>$1</li>');
+    text = text.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+    return text.replace(/\n/g, '<br>');
+  }
+
+  function escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // ✅ Start
+  initializeSocket();
+</script>
+</body>
+</html>
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d

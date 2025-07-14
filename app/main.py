@@ -1,7 +1,11 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+<<<<<<< HEAD
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+=======
+from fastapi.responses import FileResponse, HTMLResponse
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import socketio
@@ -9,10 +13,16 @@ import os
 import asyncio
 from asyncio.exceptions import CancelledError
 import random
+<<<<<<< HEAD
 from datetime import datetime
 
 # Custom modules
 from .key_manager import assign_key_to_user, release_key_for_user, get_monitor_data, update_last_active
+=======
+
+# Custom modules
+from .key_manager import assign_key_to_user, release_key_for_user, get_monitor_data
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
 from .logger import Logger
 from .config import Config
 from .modes import ChatModes
@@ -49,7 +59,11 @@ class INAIApplication:
         if self.config.is_socket_on():
             self.setup_socket_events()
         else:
+<<<<<<< HEAD
             self.logger.warning("⚠ Socket is OFF due to maintenance mode")
+=======
+            self.logger.warning("⚠️ Socket is OFF due to maintenance mode")
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
 
     def setup_routes(self):
         frontend_dir = os.path.join(os.getcwd(), "frontend")
@@ -74,6 +88,7 @@ class INAIApplication:
                 "socket": self.config.is_socket_on()
             }
 
+<<<<<<< HEAD
         @self.app.get("/INAI520", response_class=HTMLResponse)
         async def admin_panel(request: Request):
             error = request.query_params.get("error")
@@ -145,6 +160,21 @@ class INAIApplication:
                 "socket": self.config.is_socket_on()
             }
 
+=======
+        @self.app.get("/admin", response_class=HTMLResponse)
+        async def admin_panel(request: Request):
+            return self.templates.TemplateResponse("admin.html", {"request": request})
+
+        @self.app.get("/monitor", response_class=HTMLResponse)
+        async def monitor_ui(request: Request):
+            usage, sessions = get_monitor_data()
+            return self.templates.TemplateResponse("monitor.html", {
+                "request": request,
+                "key_usage": usage,
+                "user_sessions": sessions
+            })
+
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
         @self.app.post("/assign-key")
         async def assign_key(request: Request):
             data = await request.json()
@@ -158,6 +188,33 @@ class INAIApplication:
             user_id = data.get("user_id")
             return release_key_for_user(user_id)
 
+<<<<<<< HEAD
+=======
+        @self.app.post("/login")
+        async def login(req: ToggleRequest):
+            if req.password != os.getenv("TOGGLE_PASSWORD"):
+                raise HTTPException(status_code=403, detail="❌ Invalid password")
+            return {
+                "maintenance": self.config.is_maintenance_on(),
+                "socket": self.config.is_socket_on()
+            }
+
+        @self.app.post("/toggle")
+        async def toggle(req: ToggleRequest):
+            if not self.config.toggle_state(req.password):
+                raise HTTPException(status_code=403, detail="❌ Invalid password")
+            await self.disconnect_all_users()
+            if self.config.is_socket_on():
+                self.setup_socket_events()
+                self.logger.info("✅ Socket events re-enabled after maintenance OFF")
+            mode = "MAINTENANCE" if self.config.is_maintenance_on() else "NORMAL"
+            return {
+                "message": f"🔁 Mode switched to {mode}",
+                "maintenance": self.config.is_maintenance_on(),
+                "socket": self.config.is_socket_on()
+            }
+
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
     async def disconnect_all_users(self):
         for sid in list(self.session_manager.get_all_sids()):
             try:
@@ -186,12 +243,18 @@ class INAIApplication:
             if user_to_cleanup:
                 release_key_for_user(user_to_cleanup)
                 self.session_manager.cleanup_user_session(user_to_cleanup)
+<<<<<<< HEAD
                 self.logger.info(f"🔌 Disconnected: {user_to_cleanup}")
+=======
+                self.logger.info(f"Cleaned up session for user: {user_to_cleanup}")
+            self.logger.info(f"[Socket Disconnected] {sid}")
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
 
         @self.sio.event
         async def register_user(sid, data):
             user_id = data.get("username", "default_user").replace(" ", "_").lower()
             self.session_manager.create_user_session(user_id, sid)
+<<<<<<< HEAD
             key_data = assign_key_to_user(user_id, task="chat")
             if "api_key" in key_data:
                 update_last_active(user_id, sid)
@@ -202,6 +265,9 @@ class INAIApplication:
                     "audio": ""
                 }, room=sid)
                 await self.sio.disconnect(sid)
+=======
+            self.logger.info(f"User {user_id} registered with SID {sid}")
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
 
         @self.sio.event
         async def user_message(sid, data):
@@ -292,7 +358,11 @@ class INAIApplication:
                 self.logger.info(f"Processing cancelled for {user_id}")
             except Exception as e:
                 self.logger.error(f"Error for {user_id}: {e}")
+<<<<<<< HEAD
                 await self.sio.emit("response", {"text": "⚠ I faced an error. Try again.", "audio": ""}, room=sid)
+=======
+                await self.sio.emit("response", {"text": "⚠️ I faced an error. Try again.", "audio": ""}, room=sid)
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
 
         task = asyncio.create_task(process_response())
         self.session_manager.add_task(user_id, task)
@@ -357,4 +427,8 @@ class INAIApplication:
     def run(self, host="0.0.0.0", port=8000):
         import uvicorn
         self.logger.info(f"🚀 Starting INAI on http://{host}:{port}")
+<<<<<<< HEAD
         uvicorn.run(self.asgi_app, host=host, port=port, reload=True)
+=======
+        uvicorn.run(self.asgi_app, host=host, port=port, reload=True)
+>>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
