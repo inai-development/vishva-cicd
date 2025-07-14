@@ -1,32 +1,9 @@
 import os
-<<<<<<< HEAD
-from dotenv import load_dotenv
-=======
 from dotenv import dotenv_values
->>>>>>> admin
 from typing import Dict
 from uuid import uuid4
 from threading import Lock
 from datetime import datetime
-<<<<<<< HEAD
-# :white_tick: Load .env file
-load_dotenv()
-# :white_tick: Load all 44+ API keys from comma-separated string
-api_keys = [k.strip() for k in os.getenv("OPENAI_API_KEY", "").split(",") if k.strip()]
-if not api_keys:
-    raise ValueError(":x: No API keys found in OPENAI_API_KEY")
-# :white_tick: Limit per key (you can increase if needed)
-MAX_USERS_PER_KEY = 5
-# :white_tick: Track how many users use each key
-key_usage: Dict[str, int] = {key: 0 for key in api_keys}
-# :white_tick: Track sessions per user
-user_sessions: Dict[str, Dict] = {}
-# :white_tick: Lock for thread-safe access
-lock = Lock()
-def assign_key_to_user(user_id: str, task: str = "Unknown Task") -> Dict:
-    with lock:
-        # :large_green_circle: Already has a session? return same key
-=======
 
 # ✅ Load and parse environment variables using dotenv_values (more reliable than os.getenv for .env files)
 env_vars = dotenv_values(".env")
@@ -50,17 +27,11 @@ for i, key in enumerate(api_keys):
 # ✅ Assign key to user (with auto fallback)
 def assign_key_to_user(user_id: str, task: str = "Unknown Task") -> Dict:
     with lock:
->>>>>>> admin
         if user_id in user_sessions:
             return {
                 "api_key": user_sessions[user_id]["api_key"],
                 "message": "Already assigned"
             }
-<<<<<<< HEAD
-        # :large_green_circle: Assign from pool of available keys
-=======
-
->>>>>>> admin
         for key in api_keys:
             if key_usage[key] < MAX_USERS_PER_KEY:
                 key_usage[key] += 1
@@ -69,19 +40,6 @@ def assign_key_to_user(user_id: str, task: str = "Unknown Task") -> Dict:
                     "session_id": session_id,
                     "api_key": key,
                     "start_time": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
-<<<<<<< HEAD
-                    "task": task
-                }
-                return {
-                    "api_key": key,
-                    "message": "Assigned successfully"
-                }
-        # :x: No keys available
-        return {
-            "error": "All API keys are fully used",
-            "usage": key_usage
-        }
-=======
                     "task": task,
                     "last_active": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
                     "sid": None
@@ -105,7 +63,6 @@ def update_last_active(user_id: str, sid: str = None):
                 user_sessions[user_id]["sid"] = sid
 
 # ✅ Release a key when a user disconnects
->>>>>>> admin
 def release_key_for_user(user_id: str) -> Dict:
     with lock:
         session = user_sessions.pop(user_id, None)
@@ -113,13 +70,6 @@ def release_key_for_user(user_id: str) -> Dict:
             key = session["api_key"]
             if key in key_usage and key_usage[key] > 0:
                 key_usage[key] -= 1
-<<<<<<< HEAD
-            return {"message": f"Released key for {user_id}"}
-        return {"error": "User session not found or already released"}
-def get_monitor_data():
-    with lock:
-        return key_usage.copy(), user_sessions.copy()
-=======
             return {"message": f"✅ Released key for {user_id}"}
         return {"error": "⚠️ User session not found or already released"}
 
@@ -136,4 +86,3 @@ def get_monitor_data() -> Dict:
                 for user_id, session in user_sessions.items()
             }
         }
->>>>>>> admin
