@@ -1,11 +1,11 @@
-<<<<<<< HEAD
+
 FROM python:3.10-slim
 WORKDIR /app
 COPY . .
 RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && \
     pip install --upgrade pip && \
 CMD ["python", "main.py"]
-=======
+
 # Base image
 FROM python:3.11-slim
 
@@ -23,4 +23,11 @@ COPY . .
 
 # Command to run your serve.py
 CMD ["python", "serve.py"]
->>>>>>> b92b2d756284e822d1aff095435e50ec9b3ee36d
+
+FROM python:3.10-slim
+WORKDIR /app
+COPY . .
+RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && \
+    pip install --upgrade pip && \
+CMD ["python", "main.py"]
+

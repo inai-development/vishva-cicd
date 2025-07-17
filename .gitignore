@@ -1,7 +1,12 @@
 venv/
 chat_history.db
 
+<<<<<<<<< Temporary merge branch 1
 
 __pycache__/
 *.pyc
 *.db
+=========
+__pycache__
+
+>>>>>>>>> Temporary merge branch 2

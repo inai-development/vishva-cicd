@@ -32,7 +32,6 @@ def assign_key_to_user(user_id: str, task: str = "Unknown Task") -> Dict:
                 "api_key": user_sessions[user_id]["api_key"],
                 "message": "Already assigned"
             }
-
         for key in api_keys:
             if key_usage[key] < MAX_USERS_PER_KEY:
                 key_usage[key] += 1

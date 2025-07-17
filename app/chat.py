@@ -1,6 +1,5 @@
 from openai import OpenAI
 import re
-
 class ChatManager:
     def __init__(self, config, modes, database, logger):
         self.config = config
