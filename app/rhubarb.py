@@ -4,8 +4,10 @@ import tempfile
 import json
 import uuid
 # ───── CONFIGURATION ─────
-RHUBARB_PATH = r"C:\Rhubarb\rhubarb.exe"
-FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+RHUBARB_PATH = os.path.join(BASE_DIR, 'Models', 'Rhubarb', 'rhubarb.exe')
+FFMPEG_PATH = os.path.join(BASE_DIR, 'Models', 'ffmpeg', 'bin', 'ffmpeg.exe')
 # ─────────────────────────
 def convert_to_wav(input_audio_path: str, output_wav_path: str):
     subprocess.run([

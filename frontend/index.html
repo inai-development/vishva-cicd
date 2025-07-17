@@ -246,7 +246,7 @@
     }
 
     function initializeSocket() {
-      socket = io("http://13.203.101.205:7000", { transports: ["websocket"] });
+      socket = io("http://13.203.101.205:8000", { transports: ["websocket"] });
 
       socket.on("connect", () => {
         console.log("✅ Connected:", socket.id);

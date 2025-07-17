@@ -43,6 +43,15 @@ from inai_project.app.profile.routes import router as profile_router
 from inai_project.app.gender.routes import router as gender_router
 from inai_project.app.phone_number.otp_routes import router as otp_router
 
+
+from sqlalchemy.exc import OperationalError
+from sqlalchemy import text
+from inai_project.database import SessionLocal
+
+from inai_project.database import engine, Base
+from inai_project.app.signup import models  # This is important
+
+
 class AuthApplication:
     def __init__(self):
         self.app = FastAPI()
@@ -55,9 +64,21 @@ class AuthApplication:
         self.app.include_router(gender_router, prefix="/gender", tags=["Gender"])
         self.app.include_router(otp_router, prefix="/otp", tags=["OTP"])
 
+        Base.metadata.create_all(bind=engine)
+        
+
+
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        print("✅ PostgreSQL Connected Successfully!")
+        db.close()
+    except OperationalError as e:
+        print("❌ PostgreSQL Connection Failed:", e)
+
     def get_app(self):
         return self.app
-
+    
 
 
 
@@ -467,7 +488,7 @@ class INAIApplication:
             "text": query
         })
 
-    def run(self, host="0.0.0.0", port=7000):
+    def run(self, host="0.0.0.0", port=8000):
         import uvicorn
         self.logger.info(f"🚀 Starting INAI on http://{host}:{port}")
         uvicorn.run(self.asgi_app, host=host, port=port, reload=True)
