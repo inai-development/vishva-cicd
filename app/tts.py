@@ -2,6 +2,7 @@ import os
 import re
 import uuid
 import base64
+import tempfile
 
 
 class TextToSpeech:
@@ -38,6 +39,24 @@ class TextToSpeech:
             chunks.append(' '.join(current_chunk))
 
         return chunks
+    
+
+    def _clean_text(self, text: str) -> str:
+        text = re.sub(r"\((.*?)\)", "", text)
+        text = re.sub(r"[*#@%^&_=+\[\]{}<>|~`]", "", text)
+        text = re.sub(r"\s{2,}", " ", text)
+        # Remove emojis
+        text = re.sub(r'[\U0001F600-\U0001F64F'
+                      r'\U0001F300-\U0001F5FF'
+                      r'\U0001F680-\U0001F6FF'
+                      r'\U0001F1E0-\U0001F1FF'
+                      r'\U00002700-\U000027BF'
+                      r'\U0001F900-\U0001F9FF'
+                      r'\U00002600-\U000026FF'
+                      r'\U00002B00-\U00002BFF'
+                      r'\U0001FA70-\U0001FAFF'
+                      r'\U000025A0-\U000025FF]+', '', text)
+        return text.strip()
 
     async def generate_tts_chunk(self, text: str, chunk_id: int) -> str:
         """
@@ -47,22 +66,7 @@ class TextToSpeech:
         try:
             import edge_tts
 
-            clean_text = re.sub(r"\((.*?)\)", "", text)
-            clean_text = re.sub(r"[*#@%^&_=+\[\]{}<>|~`]", "", clean_text)
-            clean_text = re.sub(r"\s{2,}", " ", clean_text).strip()
-
-            # Remove emojis
-            clean_text = re.sub(r'[\U0001F600-\U0001F64F'
-                                r'\U0001F300-\U0001F5FF'
-                                r'\U0001F680-\U0001F6FF'
-                                r'\U0001F1E0-\U0001F1FF'
-                                r'\U00002700-\U000027BF'
-                                r'\U0001F900-\U0001F9FF'
-                                r'\U00002600-\U000026FF'
-                                r'\U00002B00-\U00002BFF'
-                                r'\U0001FA70-\U0001FAFF'
-                                r'\U000025A0-\U000025FF]+', '', clean_text)
-            
+            clean_text = self._clean_text(text)
 
             if not clean_text:
                 return ''
@@ -84,8 +88,7 @@ class TextToSpeech:
             except Exception as e:
                 self.logger.error(f"Failed to delete temporary TTS file {output_file}: {e}")
 
-            return audio_data 
-        
+            return audio_data
 
         except Exception as e:
             self.logger.error(f"TTS chunk error for text '{text[:50]}...': {e}")
@@ -102,23 +105,8 @@ class TextToSpeech:
 
             import edge_tts
 
-            clean_text = re.sub(r"\((.*?)\)", "", text)
-            clean_text = re.sub(r"[*#@%^&_=+\[\]{}<>|~`]", "", clean_text)
-            clean_text = re.sub(r"\s{2,}", " ", clean_text).strip()
+            clean_text = self._clean_text(text)
 
-            # Remove emojis
-            clean_text = re.sub(r'[\U0001F600-\U0001F64F'
-                                r'\U0001F300-\U0001F5FF'
-                                r'\U0001F680-\U0001F6FF'
-                                r'\U0001F1E0-\U0001F1FF'
-                                r'\U00002700-\U000027BF'
-                                r'\U0001F900-\U0001F9FF'
-                                r'\U00002600-\U000026FF'
-                                r'\U00002B00-\U00002BFF'
-                                r'\U0001FA70-\U0001FAFF'
-                                r'\U000025A0-\U000025FF]+', '', clean_text)
-            
-            
             if not clean_text:
                 return ''
 
@@ -145,3 +133,4 @@ class TextToSpeech:
         except Exception as e:
             self.logger.error(f"TTS error for text '{text[:50]}...': {e}")
             return ''
+

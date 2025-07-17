@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>INAI Chatbot</title>
+  <meta charset="UTF-8" />
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
@@ -42,14 +43,14 @@
     }
 
     .chat-container {
-      max-width: 600px;
+      max-width: 700px;
       margin: 40px auto;
       background: #1c1c1c;
       border-radius: 20px;
       padding: 20px 25px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.7);
       border: 1px solid #2e2e2e;
-      display: none; /* Initially hidden until username entered */
+      display: none;
     }
 
     h1 {
@@ -191,7 +192,6 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
-
   <!-- Username Modal -->
   <div id="usernamePrompt">
     <h2 style="color:#00ffff">Enter Your Name</h2>
@@ -240,15 +240,13 @@
         return;
       }
       username = name.replace(/\s+/g, "_").toLowerCase();
-
       document.getElementById("usernamePrompt").style.display = "none";
       document.getElementById("chatUI").style.display = "block";
-
       initializeSocket();
     }
 
     function initializeSocket() {
-      socket = io("http://13.203.101.205:8000", { transports: ["websocket"] });
+      socket = io("http://13.203.101.205:7000", { transports: ["websocket"] });
 
       socket.on("connect", () => {
         console.log("✅ Connected:", socket.id);
@@ -256,17 +254,13 @@
       });
 
       socket.on("disconnect", () => {
-        console.warn("❌ Disconnected from server");
         alert("INAI is under maintenance. Please try again later.");
       });
 
       socket.on("response", (data) => {
-        const li = document.createElement("li");
-        li.innerHTML = "<b>AI:</b><br>" + formatBotMessage(data.text || "[No reply received]");
-        li.className = "bot";
-        document.getElementById("messages").appendChild(li);
-        document.getElementById("chat-box").scrollTop = document.getElementById("chat-box").scrollHeight;
+        const botLi = displayBotMessage(data.text);
         if (data.audio) playAudio(data.audio);
+        if (data.visemes) fetchVisemes(botLi, data.visemes);
       });
 
       socket.on("streaming_audio", (data) => {
@@ -293,19 +287,71 @@
       isPlaying = false;
       audioQueue = [];
 
-      const li = document.createElement("li");
-      li.textContent = "You: " + msg;
-      li.className = "user";
-      document.getElementById("messages").appendChild(li);
-      document.getElementById("chat-box").scrollTop = document.getElementById("chat-box").scrollHeight;
+      displayUserMessage(msg);
       input.value = '';
 
       socket.emit("user_message", { username, mode, text: msg });
     }
 
+    function displayUserMessage(msg) {
+      const li = document.createElement("li");
+      li.textContent = "You: " + msg;
+      li.className = "user";
+      document.getElementById("messages").appendChild(li);
+      scrollToBottom();
+    }
+
+    function displayBotMessage(msg) {
+      const li = document.createElement("li");
+      li.className = "bot";
+      li.innerHTML = "<b>AI:</b><br>" + formatBotMessage(msg);
+      document.getElementById("messages").appendChild(li);
+      scrollToBottom();
+      return li;
+    }
+
+    function fetchVisemes(parentLi, url) {
+      fetch(url)
+        .then(res => res.json())
+        .then(json => appendPhonemeToMessage(parentLi, json))
+        .catch(err => {
+          console.error("Viseme JSON fetch failed:", err);
+          appendPhonemeToMessage(parentLi, { error: "Failed to load viseme JSON." });
+        });
+    }
+
+    function appendPhonemeToMessage(parentLi, phonemeJson) {
+      const div = document.createElement("div");
+      div.style.background = "#111";
+      div.style.color = "#0ff";
+      div.style.padding = "8px";
+      div.style.borderRadius = "8px";
+      div.style.marginTop = "6px";
+      div.style.fontSize = "12px";
+      div.style.whiteSpace = "pre-wrap";
+      div.style.maxHeight = "200px";
+      div.style.overflowY = "auto";
+
+      try {
+        const obj = typeof phonemeJson === "string" ? JSON.parse(phonemeJson) : phonemeJson;
+        const cues = obj.mouthCues || [];
+        if (cues.length === 0) {
+          div.textContent = "No mouthCues found.";
+        } else {
+          const summary = cues.map(c => `[${c.start.toFixed(2)}s - ${c.end.toFixed(2)}s]: ${c.value}`).join("\n");
+          div.textContent = "👄 LipSync Cues:\n" + summary;
+        }
+      } catch (err) {
+        div.textContent = "Error parsing viseme data.";
+        console.error("Phoneme parsing error:", err);
+      }
+
+      parentLi.appendChild(div);
+    }
+
     function playAudio(audioBase64) {
       const audioPlayer = document.getElementById("audioPlayer");
-      audioPlayer.src = "data:audio/wav;base64," + audioBase64;
+      audioPlayer.src = "data:audio/mp3;base64," + audioBase64;
       audioPlayer.hidden = false;
       audioPlayer.play();
     }
@@ -340,13 +386,18 @@
 
     function formatBotMessage(text) {
       text = text.replace(/```([\s\S]*?)```/g, (_, code) => `<pre><code>${escapeHtml(code)}</code></pre>`);
-      text = text.replace(/^\s*\*\s(.+)$/gm, '<li>$1</li>');
-      text = text.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
-      return text.replace(/\n/g, '<br>');
+      text = text.replace(/^\s*\*\s(.+)$/gm, "<li>$1</li>");
+      text = text.replace(/(<li>.*<\/li>)/gs, "<ul>$1</ul>");
+      return text.replace(/\n/g, "<br>");
     }
 
     function escapeHtml(text) {
       return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function scrollToBottom() {
+      const chatBox = document.getElementById("chat-box");
+      chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     document.getElementById("sendBtn").onclick = sendMessage;

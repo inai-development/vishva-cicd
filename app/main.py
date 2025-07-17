@@ -2,11 +2,17 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import socketio
 import os
+from fastapi import Path
+import logging
 import asyncio
+import base64
 from asyncio.exceptions import CancelledError
 import random
 from datetime import datetime
@@ -21,8 +27,40 @@ from .tts import TextToSpeech
 from .session import UserSessionManager
 from .chat import ChatManager
 from .speech import SpeechRecognition
+from .rhubarb import generate_lip_sync_json
 
-# Load .env variables
+
+
+#signup
+
+from fastapi import FastAPI
+
+
+# Auth Routers
+from inai_project.app.signup.auth_routes import router as signup_router
+from inai_project.app.login.routes import router as login_router
+from inai_project.app.profile.routes import router as profile_router
+from inai_project.app.gender.routes import router as gender_router
+from inai_project.app.phone_number.otp_routes import router as otp_router
+
+class AuthApplication:
+    def __init__(self):
+        self.app = FastAPI()
+        self.register_routes()
+
+    def register_routes(self):
+        self.app.include_router(signup_router, prefix="/signup", tags=["Signup"])
+        self.app.include_router(login_router, prefix="/login", tags=["Login"])
+        self.app.include_router(profile_router, prefix="/profile", tags=["Profile"])
+        self.app.include_router(gender_router, prefix="/gender", tags=["Gender"])
+        self.app.include_router(otp_router, prefix="/otp", tags=["OTP"])
+
+    def get_app(self):
+        return self.app
+
+
+
+
 load_dotenv()
 
 class ToggleRequest(BaseModel):
@@ -30,6 +68,7 @@ class ToggleRequest(BaseModel):
 
 class INAIApplication:
     def __init__(self):
+
         self.logger = Logger()
         self.config = Config()
         self.modes = ChatModes()
@@ -42,6 +81,13 @@ class INAIApplication:
 
         self.sio = socketio.AsyncServer(cors_allowed_origins='*', async_mode='asgi')
         self.app = FastAPI()
+        self.app.add_middleware(
+                CORSMiddleware,
+                allow_origins=["*"],  # :point_left: Allow all, or use your Flutter IP
+                allow_credentials=True,
+                allow_methods=["*"],
+                allow_headers=["*"],
+            )
         self.asgi_app = socketio.ASGIApp(self.sio, self.app)
 
         self.setup_routes()
@@ -54,6 +100,9 @@ class INAIApplication:
     def setup_routes(self):
         frontend_dir = os.path.join(os.getcwd(), "frontend")
         self.app.mount("/frontend", StaticFiles(directory=frontend_dir), name="frontend")
+        self.app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+        os.makedirs("Data", exist_ok=True)
+        self.app.mount("/data", StaticFiles(directory="Data"), name="data")
 
         @self.app.get("/chat", response_class=HTMLResponse)
         async def index():
@@ -88,6 +137,34 @@ class INAIApplication:
             response = RedirectResponse(url="/INAI520/home", status_code=303)
             response.set_cookie("INAI520", password)
             return response
+
+        @self.app.get("/audio/{filename}", response_class=FileResponse)
+        async def serve_audio_file(filename: str = Path(..., regex=r"^[\w\-. ]+\.(wav|mp3)$")):
+            file_path = os.path.abspath(os.path.join("Data", filename))
+            logging.info(f"Request for audio file: {file_path}")
+
+            if not os.path.isfile(file_path):
+                logging.warning(f"File not found: {file_path}")
+                raise HTTPException(status_code=404, detail="Audio file not found")
+
+            if filename.endswith(".wav"):
+                return FileResponse(file_path, media_type="audio/wav")
+            elif filename.endswith(".mp3"):
+                return FileResponse(file_path, media_type="audio/mpeg")
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported audio format")
+        
+
+        @self.app.get("/viseme/{filename}", response_class=FileResponse)
+        async def serve_viseme_file(filename: str):
+            if not filename.endswith(".json"):
+                raise HTTPException(status_code=400, detail="Only .json files are supported here")
+            
+            file_path = os.path.join("Data", filename)
+            if not os.path.isfile(file_path):
+                raise HTTPException(status_code=404, detail="JSON file not found")
+
+            return FileResponse(file_path, media_type="application/json")
 
         @self.app.get("/INAI520/home", response_class=HTMLResponse)
         async def admin_home(request: Request):
@@ -231,6 +308,17 @@ class INAIApplication:
         mode = data.get("mode", "friend")
         query = data.get("text", "").strip()
 
+        # text_path = os.path.join("Data", f"transcript_{user_id}.txt")
+        # audio_path = os.path.join("Data", f"speech_{user_id}.mp3")
+        # json_path = os.path.join("Data", f"rhubarb_{user_id}.json")
+        # json_url = f"/data/rhubarb_{user_id}.json"
+
+        audio_path = os.path.join("Data", f"{user_id}.wav")   # Save as .wav
+        text_path = os.path.join("Data", f"{user_id}.txt")
+        json_path = os.path.join("Data", f"{user_id}.json")
+        json_url = f"/viseme/{user_id}.json"  # Updated to match new route
+        audio_url = f"/audio/{user_id}.wav" 
+
         if user_id not in self.session_manager.user_sessions:
             self.session_manager.create_user_session(user_id, sid)
 
@@ -278,21 +366,46 @@ class INAIApplication:
             return
 
         self.session_manager.cancel_user_tasks(user_id)
-
+        
         async def process_response():
             try:
                 response = await self.chat_manager.chat_with_groq(user_id, mode, query)
+
+                # Save transcript
+                with open(text_path, "w", encoding="utf-8") as f:
+                    f.write(response)
+
                 if mode == "info":
-                    await self.sio.emit("response", {"text": response, "audio": ""}, room=sid)
+                    await self.sio.emit("response", {
+                        "text": response,
+                        "audio": "",
+                        "visemes": ""
+                    }, room=sid)
                     await self.handle_streaming_tts_for_info(user_id, response, sid)
                 else:
+                    # Generate TTS and save
                     audio = await self.tts.generate_tts(response, user_id, mode)
-                    await self.sio.emit("response", {"text": response, "audio": audio}, room=sid)
+                    with open(audio_path, "wb") as f:
+                        f.write(base64.b64decode(audio))
+
+                    # Generate lip sync JSON
+                    generate_lip_sync_json(audio_path, text_path, json_path)
+                    
+                    await self.sio.emit("response", {
+                        "text": response,
+                        "audio": audio_url,
+                        "visemes": json_url
+                    }, room=sid)
+
             except CancelledError:
                 self.logger.info(f"Processing cancelled for {user_id}")
             except Exception as e:
                 self.logger.error(f"Error for {user_id}: {e}")
-                await self.sio.emit("response", {"text": "⚠ I faced an error. Try again.", "audio": ""}, room=sid)
+                await self.sio.emit("response", {
+                    "text": "⚠ I faced an error. Try again.",
+                    "audio": "",
+                    "visemes": ""
+                }, room=sid)
 
         task = asyncio.create_task(process_response())
         self.session_manager.add_task(user_id, task)
@@ -354,7 +467,7 @@ class INAIApplication:
             "text": query
         })
 
-    def run(self, host="0.0.0.0", port=8000):
+    def run(self, host="0.0.0.0", port=7000):
         import uvicorn
         self.logger.info(f"🚀 Starting INAI on http://{host}:{port}")
         uvicorn.run(self.asgi_app, host=host, port=port, reload=True)

@@ -3,8 +3,13 @@ uvicorn
 python-socketio
 edge-tts
 pydub
+python-multipart
 SpeechRecognition
 aiosqlite
 python-dotenv
 openai
 jinja2
+sqlalchemy
+passlib[bcrypt]
+email-validator
+python-jose[cryptography]
