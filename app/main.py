@@ -37,33 +37,76 @@ from fastapi import FastAPI
 
 
 # Auth Routers
+from fastapi import FastAPI
 from inai_project.app.signup.auth_routes import router as signup_router
 from inai_project.app.login.routes import router as login_router
 from inai_project.app.profile.routes import router as profile_router
 from inai_project.app.gender.routes import router as gender_router
 from inai_project.app.phone_number.otp_routes import router as otp_router
+import uvicorn
 
+from inai_project.app.core.error_handler import (
+    validation_exception_handler,
+    internal_server_error_handler,
+    invalid_gender_handler,
+    user_already_exists_handler,
+    username_taken_handler,
+    email_taken_handler,
+    phone_taken_handler,
+    invalid_credentials_handler,
+    photo_not_uploaded_handler,
+
+    # Exceptions
+    InvalidGenderException,
+    UserAlreadyExistsException,
+    UsernameTakenException,
+    EmailTakenException,
+    PhoneTakenException,
+    InvalidCredentialsException,
+    PhotoNotUploadedException,
+)
+from fastapi.exceptions import RequestValidationError
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import text
-from inai_project.database import SessionLocal
+from fastapi import FastAPI
+from inai_project.app.history.history_routes import router as history_router
+from inai_project.app.history.history_manager import HistoryManager
+from app.logger import Logger  # ✅ Your existing logger
+from inai_project.database import SessionLocal, engine, Base
 
-from inai_project.database import engine, Base
-from inai_project.app.signup import models  # This is important
+
+
+logger = Logger()
 
 
 class AuthApplication:
     def __init__(self):
         self.app = FastAPI()
+        self.register_exception_handlers()
         self.register_routes()
+
+    def register_exception_handlers(self):
+        self.app.add_exception_handler(RequestValidationError, validation_exception_handler)
+        self.app.add_exception_handler(Exception, internal_server_error_handler)
+
+        # Custom exception handlers
+        self.app.add_exception_handler(InvalidGenderException, invalid_gender_handler)
+        self.app.add_exception_handler(UserAlreadyExistsException, user_already_exists_handler)
+        self.app.add_exception_handler(UsernameTakenException, username_taken_handler)
+        self.app.add_exception_handler(EmailTakenException, email_taken_handler)
+        self.app.add_exception_handler(PhoneTakenException, phone_taken_handler)
+        self.app.add_exception_handler(InvalidCredentialsException, invalid_credentials_handler)
+        self.app.add_exception_handler(PhotoNotUploadedException, photo_not_uploaded_handler)
 
     def register_routes(self):
         self.app.include_router(signup_router, prefix="/signup", tags=["Signup"])
+        self.app.include_router(otp_router, prefix="/phone", tags=["Phone"])
         self.app.include_router(login_router, prefix="/login", tags=["Login"])
         self.app.include_router(profile_router, prefix="/profile", tags=["Profile"])
         self.app.include_router(gender_router, prefix="/gender", tags=["Gender"])
         self.app.include_router(otp_router, prefix="/otp", tags=["OTP"])
-
+   
         Base.metadata.create_all(bind=engine)
         
 
@@ -79,6 +122,22 @@ class AuthApplication:
     def get_app(self):
         return self.app
     
+        # history integration
+
+    history_manager = HistoryManager(
+        db_url=os.getenv("DATABASE_URL"),
+        bucket_name=os.getenv("AWS_BUCKET_NAME"),
+        aws_access_key=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region=os.getenv("AWS_REGION"),
+        logger=logger
+    )
+
+
+    app = FastAPI()
+
+    def get_app(self):
+        return self.app
 
 
 
@@ -88,12 +147,13 @@ class ToggleRequest(BaseModel):
     password: str
 
 class INAIApplication:
-    def __init__(self):
+    def __init__(self, history_manager):
 
         self.logger = Logger()
         self.config = Config()
         self.modes = ChatModes()
         self.database = Database()
+        self.history = history_manager
         self.tts = TextToSpeech(self.config, self.logger)
         self.chat_manager = ChatManager(self.config, self.modes, self.database, self.logger)
         self.speech_recognition = SpeechRecognition(self.logger)
@@ -388,6 +448,9 @@ class INAIApplication:
 
         self.session_manager.cancel_user_tasks(user_id)
         
+        conversation_id = await self.history.get_or_create_conversation(user_id, mode)
+        await self.history.save_message(conversation_id, "user", query)
+
         async def process_response():
             try:
                 response = await self.chat_manager.chat_with_groq(user_id, mode, query)
@@ -415,6 +478,7 @@ class INAIApplication:
                     await self.sio.emit("response", {
                         "text": response,
                         "audio": audio_url,
+                        "audio": audio,
                         "visemes": json_url
                     }, room=sid)
 

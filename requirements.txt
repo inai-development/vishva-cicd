@@ -13,3 +13,6 @@ sqlalchemy
 passlib[bcrypt]
 email-validator
 python-jose[cryptography]
+psycopg2
+asyncpg
+boto3

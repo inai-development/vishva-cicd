@@ -6,15 +6,15 @@ import uuid
 # ───── CONFIGURATION ─────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-RHUBARB_PATH = os.path.join(BASE_DIR, 'Models', 'Rhubarb', 'rhubarb.exe')
-FFMPEG_PATH = os.path.join(BASE_DIR, 'Models', 'ffmpeg', 'bin', 'ffmpeg.exe')
+RHUBARB_PATH =  "home/ubuntu/INAI_Backend/Models/Rhubarb-L/rhubarb"
+FFMPEG_PATH = "ffmpeg"
 # ─────────────────────────
 def convert_to_wav(input_audio_path: str, output_wav_path: str):
     subprocess.run([
         FFMPEG_PATH,
         "-y",
         "-i", input_audio_path,
-        "-ar", "48000",
+        "-ar", "16000",
         output_wav_path
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 def run_rhubarb(audio_wav_path: str, transcript_path: str) -> dict:
