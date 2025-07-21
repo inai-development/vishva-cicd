@@ -1,10 +1,10 @@
 from openai import OpenAI
 import re
+
 class ChatManager:
-    def __init__(self, config, modes, database, logger):
+    def __init__(self, config, modes, logger):
         self.config = config
         self.modes = modes
-        self.database = database
         self.logger = logger
         self.chat_histories = {}
 
@@ -39,10 +39,6 @@ class ChatManager:
 
             # ✅ Update history with assistant's reply
             history.append({"role": "assistant", "content": reply})
-
-            # ✅ Persist messages
-            await self.database.save_message(user_id, mode, "user", message)
-            await self.database.save_message(user_id, mode, "assistant", reply)
 
             return reply
 

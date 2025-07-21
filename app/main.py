@@ -22,7 +22,6 @@ from .key_manager import assign_key_to_user, release_key_for_user, get_monitor_d
 from .logger import Logger
 from .config import Config
 from .modes import ChatModes
-from .database import Database
 from .tts import TextToSpeech
 from .session import UserSessionManager
 from .chat import ChatManager
@@ -152,10 +151,9 @@ class INAIApplication:
         self.logger = Logger()
         self.config = Config()
         self.modes = ChatModes()
-        self.database = Database()
         self.history = history_manager
         self.tts = TextToSpeech(self.config, self.logger)
-        self.chat_manager = ChatManager(self.config, self.modes, self.database, self.logger)
+        self.chat_manager = ChatManager(self.config, self.modes, self.logger)
         self.speech_recognition = SpeechRecognition(self.logger)
         self.session_manager = UserSessionManager(self.logger)
         self.templates = Jinja2Templates(directory="templates")
@@ -454,7 +452,7 @@ class INAIApplication:
         async def process_response():
             try:
                 response = await self.chat_manager.chat_with_groq(user_id, mode, query)
-
+                await self.history.save_message( conversation_id, "assistant", response)
                 # Save transcript
                 with open(text_path, "w", encoding="utf-8") as f:
                     f.write(response)
