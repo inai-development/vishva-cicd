@@ -9,8 +9,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RHUBARB_PATH =  "/home/ubuntu/INAI_Backend/Models/Rhubarb-L/rhubarb"
 FFMPEG_PATH = "ffmpeg"
 
-# RHUBARB_PATH = r"D:\md\Models\Rhubarb\rhubarb.exe"
-# FFMPEG_PATH = r"D:\md\Models\ffmpeg\bin\ffmpeg.exe"
+# RHUBARB_PATH = r"D:\INAI_Backend_MD\Models\Rhubarb\rhubarb.exe"
+# FFMPEG_PATH = r"D:\INAI_Backend_MD\Models\ffmpeg\bin\ffmpeg.exe"
 
 # ─────────────────────────
 def convert_to_wav(input_audio_path: str, output_wav_path: str):

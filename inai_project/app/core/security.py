@@ -1,7 +1,7 @@
 # app/core/security.py
 from datetime import datetime, timedelta
 from jose import jwt
-SECRET_KEY = "django-insecure-ysw4d=_8m^3(3hdo**uo8lb3c@-l2@k)p_g@)ja6qzm!p0ces3"
+SECRET_KEY = "2f0083ed84ab135c53a8fd052923766866135c6e2e946a4f2aff080596b3382ce92c9106"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 365 * 30  # 30 years
 def create_access_token(data: dict, expires_delta: timedelta = None):

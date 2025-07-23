@@ -3,6 +3,7 @@ import re
 import uuid
 import base64
 import tempfile
+import edge_tts
 
 
 class TextToSpeech:
@@ -64,7 +65,7 @@ class TextToSpeech:
         Returns base64-encoded MP3 audio.
         """
         try:
-            import edge_tts
+            
 
             clean_text = self._clean_text(text)
 
@@ -102,8 +103,6 @@ class TextToSpeech:
         try:
             if mode == "info":
                 return ""
-
-            import edge_tts
 
             clean_text = self._clean_text(text)
 

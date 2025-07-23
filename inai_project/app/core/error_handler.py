@@ -25,14 +25,11 @@ class PhotoNotUploadedException(Exception):
 class InvalidGenderException(Exception):
     def __init__(self, message="Gender must be male or female"):
         self.message = message
-        super().__init__(self.message)
 # :white_check_mark: Custom Validation Error Handler (Updated)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    # Handle first validation error only
     if exc.errors():
-        err = exc.errors()[0]  # Only show first error
+        err = exc.errors()[0]
         msg = err['msg']
-        # Remove "Value error, " prefix if exists
         if msg.lower().startswith("value error, "):
             msg = msg[len("Value error, "):]
         loc = " -> ".join(str(l) for l in err['loc'])
@@ -86,4 +83,3 @@ async def invalid_gender_handler(request: Request, exc: InvalidGenderException):
         status_code=HTTP_400_BAD_REQUEST,
         content={"status": False, "message": exc.message}
     )
-

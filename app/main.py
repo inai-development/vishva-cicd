@@ -139,6 +139,38 @@ class AuthApplication:
         return self.app
 
 
+from fastapi import FastAPI
+from inai_project.app.history.history_manager import HistoryManager
+from inai_project.app.history import history_routes  # Make sure this import is correct
+from inai_project.app.signup import models as signup_models
+signup_models.Base.metadata.create_all(bind=engine)
+
+import logging
+logger = logging.getLogger("MainApp")
+logging.basicConfig(level=logging.INFO)
+app = FastAPI()
+# Replace these with your real AWS & DB settings
+DB_URL = "your_postgres_url"
+BUCKET_NAME = "your-s3-bucket"
+AWS_ACCESS_KEY = "your-access-key"
+AWS_SECRET_KEY = "your-secret-key"
+REGION = "ap-south-1"  # or your AWS region
+@app.on_event("startup")
+async def startup():
+    app.state.history_manager = HistoryManager(
+        db_url=DB_URL,
+        bucket_name=BUCKET_NAME,
+        aws_access_key=AWS_ACCESS_KEY,
+        aws_secret_key=AWS_SECRET_KEY,
+        region=REGION,
+        logger=logger
+    )
+    await app.state.history_manager.init_db()
+@app.on_event("shutdown")
+async def shutdown():
+    await app.state.history_manager.close()
+# :white_check_mark: Register the router
+app.include_router(history_routes.router, prefix="/history")
 
 load_dotenv()
 
@@ -346,7 +378,7 @@ class INAIApplication:
 
         @self.sio.event
         async def register_user(sid, data):
-            user_id = data.get("username", "default_user").replace(" ", "_").lower()
+            user_id = str(data.get("user_id", "default_user")).replace(" ", "_").lower()
             self.session_manager.create_user_session(user_id, sid)
             key_data = assign_key_to_user(user_id, task="chat")
             if "api_key" in key_data:
@@ -369,7 +401,7 @@ class INAIApplication:
 
         @self.sio.event
         async def stop_response(sid, data):
-            user_id = data.get("username", "default_user").replace(" ", "_").lower()
+            user_id = str(data.get("user_id", "default_user")).replace(" ", "_").lower()
             self.logger.info(f"Stop response requested by user: {user_id}")
             self.session_manager.cancel_user_tasks(user_id)
 
@@ -383,7 +415,7 @@ class INAIApplication:
             await self.sio.disconnect(sid)
             return
 
-        user_id = data.get("username", "default_user").replace(" ", "_").lower()
+        user_id = str(data.get("user_id", "default_user")).replace(" ", "_").lower()
         mode = data.get("mode", "friend")
         query = data.get("text", "").strip()
 
@@ -427,13 +459,50 @@ class INAIApplication:
                 await self.sio.emit("mode_change", {"mode": target_mode}, room=sid)
                 confirm_text = self.modes.mode_confirmations[target_mode]
                 self.session_manager.cancel_user_tasks(user_id)
-
                 if target_mode == "info":
-                    await self.sio.emit("response", {"text": confirm_text, "audio": ""}, room=sid)
+                    await self.sio.emit("response", {"text": confirm_text, "audio": "", "visemes": ""}, room=sid)
                     await self.handle_streaming_tts_for_info(user_id, confirm_text, sid)
                 else:
-                    confirm_audio = await self.tts.generate_tts(confirm_text, user_id, target_mode)
-                    await self.sio.emit("response", {"text": confirm_text, "audio": confirm_audio}, room=sid)
+                    # Generate TTS audio for mode confirmation
+                    confirm_audio_base64 = await self.tts.generate_tts(confirm_text, user_id, target_mode)
+                    # Generate lip sync for mode confirmation
+                    try:
+                        # Save the confirmation text and audio for lip sync generation
+                        audio_path = os.path.join("Data", f"{user_id}_mode_confirm.wav")
+                        text_path = os.path.join("Data", f"{user_id}_mode_confirm.txt")
+                        json_path = os.path.join("Data", f"{user_id}_mode_confirm.json")
+                        json_url = f"/viseme/{user_id}_mode_confirm.json"
+                        # Save text file
+                        with open(text_path, "w", encoding="utf-8") as f:
+                            f.write(confirm_text)
+                        # Save audio file for lip sync generation
+                        if confirm_audio_base64:
+                            audio_bytes = base64.b64decode(confirm_audio_base64)
+                            with open(audio_path, "wb") as f:
+                                f.write(audio_bytes)
+                            # Generate lip sync JSON
+                            generate_lip_sync_json(audio_path, text_path, json_path)
+                            # Send response with audio and visemes
+                            await self.sio.emit("response", {
+                                "text": confirm_text,
+                                "audio": confirm_audio_base64,
+                                "visemes": json_url
+                            }, room=sid)
+                        else:
+                            # Send response without audio if TTS fails
+                            await self.sio.emit("response", {
+                                "text": confirm_text,
+                                "audio": "",
+                                "visemes": ""
+                            }, room=sid)
+                    except Exception as lip_sync_error:
+                        self.logger.error(f"Lip sync error for mode confirmation {user_id}: {lip_sync_error}")
+                        # Send response without visemes if lip sync fails
+                        await self.sio.emit("response", {
+                            "text": confirm_text,
+                            "audio": confirm_audio_base64,
+                            "visemes": ""
+                        }, room=sid)
                 return
 
         if mode != "info" and any(word in query_lower for word in ["stop", "wait", "ruko", "arre", "sun"]):
@@ -476,7 +545,7 @@ class INAIApplication:
                     await self.sio.emit("response", {
                         "text": response,
                         "audio": audio_url,
-                        "audio": audio,
+                        "audio_s": audio,
                         "visemes": json_url
                     }, room=sid)
 
@@ -526,7 +595,7 @@ class INAIApplication:
             await self.sio.disconnect(sid)
             return
 
-        user_id = data.get("username", "default_user").replace(" ", "_").lower()
+        user_id = str(data.get("user_id", "default_user")).replace(" ", "_").lower()
         mode = data.get("mode", "friend")
         audio_base64 = data.get("audio", "")
 
@@ -545,11 +614,12 @@ class INAIApplication:
             return
 
         await self.handle_user_message(sid, {
-            "username": user_id,
+            "user_id": user_id,
             "mode": mode,
             "text": query
         })
 
+    # def run(self, host="0.0.0.0", port=7200):
     def run(self, host="0.0.0.0", port=8000):
         import uvicorn
         self.logger.info(f"🚀 Starting INAI on http://{host}:{port}")

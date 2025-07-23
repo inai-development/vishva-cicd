@@ -11,6 +11,7 @@ from app.phone_number import models as phone_models
 from app.profile import models as profile_models
 from app.gender import models as gender_models
 from app.login import models as login_models  # :white_check_mark: NEW: LoginRecord
+from inai_project.app.history.history_routes import router as history_router 
 from app.core.error_handler import (
     validation_exception_handler,
     internal_server_error_handler,
@@ -50,6 +51,7 @@ app.include_router(login_router, prefix="/api/auth/login", tags=["Login"])  # :w
 app.include_router(phone_otp_router, prefix="/api/phone", tags=["Phone OTP"])
 app.include_router(profile_router, prefix="/api/profile", tags=["Profile"])
 app.include_router(gender_router, prefix="/api/gender", tags=["Gender"])
+app.include_router(history_router, prefix="/history", tags=["History"])
 # Register the handlers
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(UserAlreadyExistsException, user_already_exists_handler)
@@ -70,3 +72,5 @@ login_models.Base.metadata.create_all(bind=engine)  # :white_check_mark: NEW
 @app.get("/")
 def root():
     return {"message": ":rocket: FastAPI Auth API Running!"}
+
+

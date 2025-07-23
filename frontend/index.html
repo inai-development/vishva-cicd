@@ -230,7 +230,7 @@
     let socket;
     let audioQueue = [];
     let isPlaying = false;
-    let username = "";
+    let user_id = "";
 
     function setUsername() {
       const input = document.getElementById("usernameInput");
@@ -239,7 +239,7 @@
         alert("Please enter your name");
         return;
       }
-      username = name.replace(/\s+/g, "_").toLowerCase();
+      user_id = name.replace(/\s+/g, "_").toLowerCase();
       document.getElementById("usernamePrompt").style.display = "none";
       document.getElementById("chatUI").style.display = "block";
       initializeSocket();
@@ -247,10 +247,11 @@
 
     function initializeSocket() {
       socket = io("http://13.234.84.236:8000", { transports: ["websocket"] });
+      // socket = io("http://192.168.1.89:7200", { transports: ["websocket"] });
 
       socket.on("connect", () => {
         console.log("✅ Connected:", socket.id);
-        socket.emit("register_user", { username });
+        socket.emit("register_user", { user_id });
       });
 
       socket.on("disconnect", () => {
@@ -290,7 +291,7 @@
       displayUserMessage(msg);
       input.value = '';
 
-      socket.emit("user_message", { username, mode, text: msg });
+      socket.emit("user_message", { user_id, mode, text: msg });
     }
 
     function displayUserMessage(msg) {
