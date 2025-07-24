@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <title>INAI Chatbot</title>
   <meta charset="UTF-8" />
+  <link rel="icon" href="./public/favicon.jpg" type="image/jpeg">
+
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
@@ -48,7 +51,7 @@
       background: #1c1c1c;
       border-radius: 20px;
       padding: 20px 25px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
       border: 1px solid #2e2e2e;
       display: none;
     }
@@ -98,7 +101,7 @@
       border: 1px solid #333;
     }
 
-    #messages {
+    /* #messages {
       list-style: none;
       padding: 0;
       margin: 0;
@@ -126,7 +129,7 @@
       align-self: flex-start;
       margin-right: auto;
       text-align: left;
-    }
+    } */
 
     #controls {
       display: flex;
@@ -145,7 +148,8 @@
       font-size: 14px;
     }
 
-    #sendBtn, #mic-btn {
+    #sendBtn,
+    #mic-btn {
       padding: 10px 16px;
       font-size: 15px;
       border-radius: 12px;
@@ -190,7 +194,23 @@
     }
   </style>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+
+
+  <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+  <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@v0.163.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@v0.163.0/examples/jsm/"
+        }
+      }
+    </script>
+
+
+
 </head>
+
 <body>
   <!-- Username Modal -->
   <div id="usernamePrompt">
@@ -200,6 +220,7 @@
   </div>
 
   <!-- Chat UI -->
+
   <div class="chat-container" id="chatUI">
     <h1>INAI Chatbot</h1>
 
@@ -222,6 +243,13 @@
       <button id="sendBtn">Send</button>
       <button id="mic-btn">🎤</button>
     </div>
+
+
+    <div id="progress-container">
+      <div id="progress">Engaging Hyperdrive...</div>
+    </div>
+    <script type="module" src="/frontend/main.js"></script>
+
 
     <audio id="audioPlayer" hidden></audio>
   </div>
@@ -246,13 +274,14 @@
     }
 
     function initializeSocket() {
-      socket = io("http://13.234.84.236:8000", { transports: ["websocket"] });
       // socket = io("http://192.168.1.89:7200", { transports: ["websocket"] });
-
+      socket = io("http://13.234.84.236:8000", { transports: ["websocket"] });
+      window.socket = socket;
       socket.on("connect", () => {
         console.log("✅ Connected:", socket.id);
         socket.emit("register_user", { user_id });
       });
+
 
       socket.on("disconnect", () => {
         alert("INAI is under maintenance. Please try again later.");
@@ -262,6 +291,9 @@
         const botLi = displayBotMessage(data.text);
         if (data.audio) playAudio(data.audio);
         if (data.visemes) fetchVisemes(botLi, data.visemes);
+
+        console.log(data);
+
       });
 
       socket.on("streaming_audio", (data) => {
@@ -275,6 +307,7 @@
         document.getElementById("mode").value = data.mode;
       });
     }
+
 
     function sendMessage() {
       const input = document.getElementById("messageInput");
@@ -405,5 +438,5 @@
     document.getElementById("mic-btn").onclick = startVoice;
   </script>
 </body>
-</html>
 
+</html>

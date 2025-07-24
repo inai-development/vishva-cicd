@@ -33,7 +33,8 @@ class HistoryManager:
 
     async def init_db(self):
         try:
-            ssl_context = ssl.create_default_context(cafile="D:\INAI_Backend_MD\certs/rds-ca.pem.pem")
+            # ssl_context = ssl.create_default_context(cafile=r"D:\INAI_Backend_MD\certs\rds-ca.pem")
+            ssl_context = ssl.create_default_context(cafile=r"/home/ubuntu/INAI_Backend/certs/rds-ca.pem")
             self.pool = await asyncpg.create_pool(
                 dsn=self.db_url,
                 min_size=1,
@@ -155,19 +156,16 @@ class HistoryManager:
 
     async def get_conversation_messages(self, conversation_id: str) -> List[Dict]:
         try:
-            self.logger.info(f"🔍 Fetching messages for conversation_id: {conversation_id}")
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch("""
                     SELECT role, content, created_at, audio_url FROM messages
                     WHERE conversation_id = $1
                     ORDER BY created_at ASC
                 """, conversation_id)
-            self.logger.info(f"✅ Fetched {len(rows)} messages")
             return [dict(row) for row in rows]
         except Exception as e:
             self.logger.error(f"❌ Failed to get messages: {e}")
             return []
-
 
     async def get_user_conversations(self, username: str) -> List[Dict]:
         try:

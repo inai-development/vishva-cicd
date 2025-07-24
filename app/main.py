@@ -170,7 +170,7 @@ async def startup():
 async def shutdown():
     await app.state.history_manager.close()
 # :white_check_mark: Register the router
-app.include_router(history_routes.router, prefix="/history")
+# app.include_router(history_routes.router, prefix="/history")
 
 load_dotenv()
 
@@ -190,16 +190,28 @@ class INAIApplication:
         self.session_manager = UserSessionManager(self.logger)
         self.templates = Jinja2Templates(directory="templates")
 
+        # self.sio = socketio.AsyncServer(cors_allowed_origins='*', async_mode='asgi')
+        # self.app = FastAPI()
+        # self.app.add_middleware(
+        #         CORSMiddleware,
+        #         allow_origins=["*"],  # :point_left: Allow all, or use your Flutter IP
+        #         allow_credentials=True,
+        #         allow_methods=["*"],
+        #         allow_headers=["*"],
+        #     )
+        # self.asgi_app = socketio.ASGIApp(self.sio, self.app)
+
+
         self.sio = socketio.AsyncServer(cors_allowed_origins='*', async_mode='asgi')
         self.app = FastAPI()
         self.app.add_middleware(
-                CORSMiddleware,
-                allow_origins=["*"],  # :point_left: Allow all, or use your Flutter IP
-                allow_credentials=True,
-                allow_methods=["*"],
-                allow_headers=["*"],
-            )
-        self.asgi_app = socketio.ASGIApp(self.sio, self.app)
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        self.asgi_app = socketio.ASGIApp(self.sio, self.app, socketio_path="/socket.io")
 
         self.setup_routes()
 
@@ -544,8 +556,8 @@ class INAIApplication:
                     
                     await self.sio.emit("response", {
                         "text": response,
-                        "audio": audio_url,
-                        "audio_s": audio,
+                        # "audio": audio_url,
+                        "audio": audio,
                         "visemes": json_url
                     }, room=sid)
 

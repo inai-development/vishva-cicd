@@ -60,13 +60,7 @@ class TextToSpeech:
         return text.strip()
 
     async def generate_tts_chunk(self, text: str, chunk_id: int) -> str:
-        """
-        Generate a single MP3 audio chunk for a chunk of text.
-        Returns base64-encoded MP3 audio.
-        """
         try:
-            
-
             clean_text = self._clean_text(text)
 
             if not clean_text:
@@ -96,10 +90,6 @@ class TextToSpeech:
             return ''
 
     async def generate_tts(self, text: str, user_id: str, mode: str = "friend") -> str:
-        """
-        Generate a full TTS response for the given text and user.
-        Returns base64-encoded MP3 audio.
-        """
         try:
             if mode == "info":
                 return ""
@@ -132,4 +122,3 @@ class TextToSpeech:
         except Exception as e:
             self.logger.error(f"TTS error for text '{text[:50]}...': {e}")
             return ''
-
