@@ -8,7 +8,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "app")))
 # Step 2: Load environment variables
 load_dotenv()
 # Step 3: Import
-from app.main import INAIApplication, AuthApplication
+from app.main import INAIApplication
+from inai_project.main import AuthApplication
 from inai_project.app.history.history_routes import router as history_router
 from inai_project.app.history.history_manager import HistoryManager
 from app.logger import Logger
@@ -28,6 +29,7 @@ app = FastAPI()
 # Step 7: Mount Auth routes FIRST (specific routes before general ones)
 auth_app = AuthApplication().get_app()
 app.mount("/auth", auth_app)
+
 # Step 8: Include History API BEFORE mounting INAI app
 app.include_router(history_router, prefix="/history")
 # Step 9: Create INAI app but DON'T mount it yet - we'll handle routes manually
@@ -62,3 +64,4 @@ async def shutdown():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(sio_app, host="0.0.0.0", port=8000)
+    # uvicorn.run(sio_app, host="0.0.0.0", port=4210)

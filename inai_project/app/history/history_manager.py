@@ -7,10 +7,8 @@ from typing import List, Dict, Optional
 import logging
 import ssl
 
-
 logger = logging.getLogger("HistoryManager")
 logging.basicConfig(level=logging.INFO)
-
 
 class HistoryManager:
     def __init__(self, db_url: str, bucket_name: str, aws_access_key: str, aws_secret_key: str, region: str, logger):
@@ -18,6 +16,7 @@ class HistoryManager:
         self.pool = None
         self.logger = logger
         self.bucket_name = bucket_name
+        self.active_conversations = {}
         self.region = region
         try:
             self.s3 = boto3.client(
@@ -45,14 +44,15 @@ class HistoryManager:
             async with self.pool.acquire() as conn:
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS conversations (
-                        id UUID PRIMARY KEY,
-                        username TEXT NOT NULL,
-                        title TEXT NOT NULL,
-                        mode TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        is_archived BOOLEAN DEFAULT FALSE
-                    )
+                    id UUID PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    mode TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_archived BOOLEAN DEFAULT FALSE
+                )
+
                 """)
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS messages (
@@ -64,7 +64,7 @@ class HistoryManager:
                         audio_url TEXT
                     )
                 """)
-                await conn.execute("""CREATE INDEX IF NOT EXISTS idx_conversations_username ON conversations(username)""")
+                await conn.execute("""CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)""")
                 await conn.execute("""CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC)""")
                 await conn.execute("""CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)""")
             self.logger.info("✅ Database tables created successfully.")
@@ -77,37 +77,44 @@ class HistoryManager:
             await self.pool.close()
             self.logger.info("Database connection closed")
 
-    async def get_or_create_conversation(self, user_id: str, mode: str) -> str:
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow("""
-                SELECT id FROM conversations
-                WHERE username = $1 AND mode = $2 AND is_archived = false
-                ORDER BY updated_at DESC
-                LIMIT 1
-            """, user_id, mode)
-
-            if row:
-                conversation_id = str(row["id"])
-                self.logger.info(f"Retrieved existing conversation: {conversation_id} for user {user_id}")
-            else:
-                conversation_id = str(uuid.uuid4())
-                await conn.execute("""
-                    INSERT INTO conversations (id, username, title, mode)
-                    VALUES ($1, $2, $3, $4)
-                """, conversation_id, user_id, "New Conversation", mode)
-                self.logger.info(f"Created new conversation: {conversation_id} for user {user_id}")
-            return conversation_id
-
-    async def create_conversation(self, username: str, title: str, mode: str) -> str:
+    async def create_new_conversation(self, user_id: str, mode: str, title: str = "New Conversation") -> str:
         conversation_id = str(uuid.uuid4())
-        print(f"🚩 Saving Conversation: {conversation_id} user={username} title={title} mode={mode}")  # Debug log
         try:
             async with self.pool.acquire() as conn:
                 await conn.execute("""
-                    INSERT INTO conversations (id, username, title, mode)
+                    INSERT INTO conversations (id, user_id, title, mode)
                     VALUES ($1, $2, $3, $4)
-                """, conversation_id, username, title, mode)
-            self.logger.info(f"✅ Created conversation {conversation_id} for user {username}")
+                """, conversation_id, user_id, title, mode)
+            self.active_conversations[user_id] = conversation_id
+            self.logger.info(f"✅ NEW CHAT: Created conversation {conversation_id} for user {user_id}")
+            return conversation_id
+        except Exception as e:
+            self.logger.error(f"❌ Failed to create new conversation: {e}")
+            raise
+
+    async def get_or_create_conversation(self, user_id: str, mode: str) -> str:
+        if user_id in self.active_conversations:
+            conversation_id = self.active_conversations[user_id]
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow("""
+                    SELECT id FROM conversations WHERE id = $1
+                """, conversation_id)
+                if row:
+                    self.logger.info(f"📝 Using active conversation: {conversation_id} for user {user_id}")
+                    return conversation_id
+                else:
+                    del self.active_conversations[user_id]
+        return await self.create_new_conversation(user_id, mode)
+
+    async def create_conversation(self, user_id: str, title: str, mode: str) -> str:
+        conversation_id = str(uuid.uuid4())
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO conversations (id, user_id, title, mode)
+                    VALUES ($1, $2, $3, $4)
+                """, conversation_id, user_id, title, mode)
+            self.logger.info(f"✅ Created conversation {conversation_id} for user {user_id}")
             return conversation_id
         except Exception as e:
             self.logger.error(f"❌ Failed to create conversation: {e}")
@@ -167,18 +174,18 @@ class HistoryManager:
             self.logger.error(f"❌ Failed to get messages: {e}")
             return []
 
-    async def get_user_conversations(self, username: str) -> List[Dict]:
+    async def get_user_conversations(self, user_id: str) -> List[Dict]:
         try:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch("""
                     SELECT id, title, mode, created_at, updated_at, is_archived
                     FROM conversations
-                    WHERE username = $1
+                    WHERE user_id = $1
                     ORDER BY updated_at DESC
-                """, username)
+                """, user_id)
             return [dict(row) for row in rows]
         except Exception as e:
-            self.logger.error(f"❌ Failed to get conversations for user {username}: {e}")
+            self.logger.error(f"❌ Failed to get conversations for user {user_id}: {e}")
             return []
 
     async def save_audio_message_from_file(self, conversation_id: str, audio_path: str):
@@ -191,3 +198,85 @@ class HistoryManager:
         else:
             self.logger.warning(f"⚠️ Audio file not found at {audio_path}. Skipping audio upload.")
             return None
+
+    async def set_active_conversation(self, user_id: str, conversation_id: str):
+        self.active_conversations[user_id] = conversation_id
+        self.logger.info(f"🔄 Active conversation changed to {conversation_id} for user {user_id}")
+
+    async def get_user_conversations_by_mode(self, user_id: str, mode: str) -> List[Dict]:
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT id, title, mode, created_at, updated_at, is_archived
+                    FROM conversations
+                    WHERE user_id = $1 AND mode = $2 AND is_archived = false
+                    ORDER BY updated_at DESC
+                """, user_id, mode)
+            return [dict(row) for row in rows]
+        except Exception as e:
+            self.logger.error(f"❌ Failed to get mode-wise conversations for {user_id}: {e}")
+            return []
+
+    async def get_user_conversations_with_preview(self, user_id: str) -> List[Dict]:
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT 
+                        c.id, 
+                        c.title, 
+                        c.mode, 
+                        c.created_at, 
+                        c.updated_at,
+                        c.is_archived,
+                        m.content as last_message
+                    FROM conversations c
+                    LEFT JOIN LATERAL (
+                        SELECT content 
+                        FROM messages 
+                        WHERE conversation_id = c.id 
+                        ORDER BY created_at DESC 
+                        LIMIT 1
+                    ) m ON true
+                    WHERE c.user_id = $1 AND c.is_archived = false
+                    ORDER BY c.updated_at DESC
+                """, user_id)
+            conversations = []
+            for row in rows:
+                conv = dict(row)
+                if conv['last_message']:
+                    conv['preview'] = conv['last_message'][:50] + "..." if len(conv['last_message']) > 50 else conv['last_message']
+                else:
+                    conv['preview'] = "No messages yet"
+                conversations.append(conv)
+            return conversations
+        except Exception as e:
+            self.logger.error(f"❌ Failed to get conversations for user {user_id}: {e}")
+            return []
+
+    async def archive_conversation(self, conversation_id: str, user_id: str):
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("""
+                    UPDATE conversations 
+                    SET is_archived = true 
+                    WHERE id = $1 AND user_id = $2
+                """, conversation_id, user_id)
+            if user_id in self.active_conversations and self.active_conversations[user_id] == conversation_id:
+                del self.active_conversations[user_id]
+            self.logger.info(f"🗄️ Archived conversation {conversation_id} for user {user_id}")
+        except Exception as e:
+            self.logger.error(f"❌ Failed to archive conversation: {e}")
+            raise
+
+    async def update_conversation_title(self, conversation_id: str, new_title: str, user_id: str):
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("""
+                    UPDATE conversations 
+                    SET title = $1, updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = $2 AND user_id = $3
+                """, new_title, conversation_id, user_id)
+            self.logger.info(f"📝 Updated conversation title: {conversation_id} -> {new_title}")
+        except Exception as e:
+            self.logger.error(f"❌ Failed to update conversation title: {e}")
+            raise

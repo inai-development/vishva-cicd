@@ -1,76 +1,106 @@
+import os
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.signup.auth_routes import router as signup_router
-from app.phone_number.otp_routes import router as phone_otp_router
-from app.profile.routes import router as profile_router
-from app.gender.routes import router as gender_router
-from app.login.routes import router as login_router  # :white_check_mark: NEW: Login
-from database import engine
-from app.signup import models as signup_models
-from app.phone_number import models as phone_models
-from app.profile import models as profile_models
-from app.gender import models as gender_models
-from app.login import models as login_models  # :white_check_mark: NEW: LoginRecord
-from inai_project.app.history.history_routes import router as history_router 
-from app.core.error_handler import (
+from fastapi.exceptions import RequestValidationError
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+
+# Routers
+from inai_project.app.signup.auth_routes import router as signup_router
+from inai_project.app.login.routes import router as login_router
+from inai_project.app.profile.routes import router as profile_router
+from inai_project.app.gender.routes import router as gender_router
+from inai_project.app.phone_number.otp_routes import router as otp_router
+from inai_project.app.history.history_routes import router as history_router
+
+# Error handlers and exceptions
+from inai_project.app.core.error_handler import (
     validation_exception_handler,
     internal_server_error_handler,
+    invalid_gender_handler,
     user_already_exists_handler,
     username_taken_handler,
     email_taken_handler,
     phone_taken_handler,
-    photo_not_uploaded_handler,
     invalid_credentials_handler,
-    invalid_gender_handler,
+    photo_not_uploaded_handler,
+    InvalidGenderException,
     UserAlreadyExistsException,
     UsernameTakenException,
     EmailTakenException,
     PhoneTakenException,
     InvalidCredentialsException,
     PhotoNotUploadedException,
-    InvalidGenderException
 )
-from fastapi.exceptions import RequestValidationError
-# :white_check_mark: FastAPI app config
-app = FastAPI(
-    title="INAI FastAPI Auth API",
-    description="Signup, Login, JWT, Phone OTP, Profile Upload with JWT",
-    version="1.0.0"
-)
-# :white_check_mark: CORS for dev
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Dev only!
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-# :white_check_mark: Register all routers
-app.include_router(signup_router, prefix="/api/auth/signup", tags=["Signup"])
-app.include_router(login_router, prefix="/api/auth/login", tags=["Login"])  # :white_check_mark: NEW
-app.include_router(phone_otp_router, prefix="/api/phone", tags=["Phone OTP"])
-app.include_router(profile_router, prefix="/api/profile", tags=["Profile"])
-app.include_router(gender_router, prefix="/api/gender", tags=["Gender"])
-app.include_router(history_router, prefix="/history", tags=["History"])
-# Register the handlers
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(UserAlreadyExistsException, user_already_exists_handler)
-app.add_exception_handler(UsernameTakenException, username_taken_handler)
-app.add_exception_handler(EmailTakenException, email_taken_handler)
-app.add_exception_handler(PhoneTakenException, phone_taken_handler)
-app.add_exception_handler(InvalidCredentialsException, invalid_credentials_handler)
-app.add_exception_handler(Exception, internal_server_error_handler)  # :white_check_mark: 500 handler
-app.add_exception_handler(PhotoNotUploadedException, photo_not_uploaded_handler)
-app.add_exception_handler(InvalidGenderException, invalid_gender_handler)
-# :white_check_mark: Create all tables
-signup_models.Base.metadata.create_all(bind=engine)
-phone_models.Base.metadata.create_all(bind=engine)
-profile_models.Base.metadata.create_all(bind=engine)
-gender_models.Base.metadata.create_all(bind=engine)
-login_models.Base.metadata.create_all(bind=engine)  # :white_check_mark: NEW
-# :white_check_mark: Health check
-@app.get("/")
-def root():
-    return {"message": ":rocket: FastAPI Auth API Running!"}
+
+# History manager and logger
+from inai_project.app.history.history_manager import HistoryManager
+from app.logger import Logger
+
+# Database setup
+from inai_project.database import SessionLocal, engine, Base
+
+logger = Logger()
 
 
+class AuthApplication:
+    def __init__(self):
+        self.app = FastAPI(
+            title="INAI FastAPI Auth API",
+            description="Signup, Login, JWT, Phone OTP, Profile Upload with JWT",
+            version="1.0.0"
+        )
+        self.history_manager = self.setup_history_manager()
+        self.create_tables()
+        self.test_db_connection()
+        self.register_exception_handlers()
+        self.register_routes()
+
+    def register_exception_handlers(self):
+        self.app.add_exception_handler(RequestValidationError, validation_exception_handler)
+        self.app.add_exception_handler(Exception, internal_server_error_handler)
+        self.app.add_exception_handler(InvalidGenderException, invalid_gender_handler)
+        self.app.add_exception_handler(UserAlreadyExistsException, user_already_exists_handler)
+        self.app.add_exception_handler(UsernameTakenException, username_taken_handler)
+        self.app.add_exception_handler(EmailTakenException, email_taken_handler)
+        self.app.add_exception_handler(PhoneTakenException, phone_taken_handler)
+        self.app.add_exception_handler(InvalidCredentialsException, invalid_credentials_handler)
+        self.app.add_exception_handler(PhotoNotUploadedException, photo_not_uploaded_handler)
+
+    def register_routes(self):
+        self.app.include_router(signup_router, prefix="/signup", tags=["Signup"])
+        self.app.include_router(login_router, prefix="/login", tags=["Login"])
+        self.app.include_router(profile_router, prefix="/profile", tags=["Profile"])
+        self.app.include_router(gender_router, prefix="/gender", tags=["Gender"])
+        self.app.include_router(otp_router, prefix="/phone", tags=["Phone"])
+        self.app.include_router(otp_router, prefix="/otp", tags=["OTP"])
+        self.app.include_router(history_router, prefix="/history", tags=["History"])
+
+        @self.app.get("/")
+        def health_check():
+            return {"message": ":rocket: FastAPI Auth API Running!"}
+
+    def setup_history_manager(self):
+        return HistoryManager(
+            db_url=os.getenv("DATABASE_URL"),
+            bucket_name=os.getenv("AWS_BUCKET_NAME"),
+            aws_access_key=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            region=os.getenv("AWS_REGION"),
+            logger=logger
+        )
+
+    def create_tables(self):
+        Base.metadata.create_all(bind=engine)
+
+    def test_db_connection(self):
+        try:
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+            print("✅ PostgreSQL Connected Successfully!")
+        except OperationalError as e:
+            print("❌ PostgreSQL Connection Failed:", e)
+        finally:
+            db.close()
+
+    def get_app(self):
+        return self.app

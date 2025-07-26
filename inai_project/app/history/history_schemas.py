@@ -10,7 +10,7 @@ class MessageCreate(BaseModel):
 
 
 class ConversationCreate(BaseModel):
-    username: str
+    user_id: str
     title: str
     mode: str
 

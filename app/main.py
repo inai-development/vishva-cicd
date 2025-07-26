@@ -26,123 +26,14 @@ from .tts import TextToSpeech
 from .session import UserSessionManager
 from .chat import ChatManager
 from .speech import SpeechRecognition
-from .rhubarb import generate_lip_sync_json
-
-
-
-#signup
-
-from fastapi import FastAPI
-
-
-# Auth Routers
-from fastapi import FastAPI
-from inai_project.app.signup.auth_routes import router as signup_router
-from inai_project.app.login.routes import router as login_router
-from inai_project.app.profile.routes import router as profile_router
-from inai_project.app.gender.routes import router as gender_router
-from inai_project.app.phone_number.otp_routes import router as otp_router
-import uvicorn
-
-from inai_project.app.core.error_handler import (
-    validation_exception_handler,
-    internal_server_error_handler,
-    invalid_gender_handler,
-    user_already_exists_handler,
-    username_taken_handler,
-    email_taken_handler,
-    phone_taken_handler,
-    invalid_credentials_handler,
-    photo_not_uploaded_handler,
-
-    # Exceptions
-    InvalidGenderException,
-    UserAlreadyExistsException,
-    UsernameTakenException,
-    EmailTakenException,
-    PhoneTakenException,
-    InvalidCredentialsException,
-    PhotoNotUploadedException,
-)
-from fastapi.exceptions import RequestValidationError
-
-from sqlalchemy.exc import OperationalError
-from sqlalchemy import text
-from fastapi import FastAPI
-from inai_project.app.history.history_routes import router as history_router
-from inai_project.app.history.history_manager import HistoryManager
-from app.logger import Logger  # ✅ Your existing logger
-from inai_project.database import SessionLocal, engine, Base
-
-
-
-logger = Logger()
-
-
-class AuthApplication:
-    def __init__(self):
-        self.app = FastAPI()
-        self.register_exception_handlers()
-        self.register_routes()
-
-    def register_exception_handlers(self):
-        self.app.add_exception_handler(RequestValidationError, validation_exception_handler)
-        self.app.add_exception_handler(Exception, internal_server_error_handler)
-
-        # Custom exception handlers
-        self.app.add_exception_handler(InvalidGenderException, invalid_gender_handler)
-        self.app.add_exception_handler(UserAlreadyExistsException, user_already_exists_handler)
-        self.app.add_exception_handler(UsernameTakenException, username_taken_handler)
-        self.app.add_exception_handler(EmailTakenException, email_taken_handler)
-        self.app.add_exception_handler(PhoneTakenException, phone_taken_handler)
-        self.app.add_exception_handler(InvalidCredentialsException, invalid_credentials_handler)
-        self.app.add_exception_handler(PhotoNotUploadedException, photo_not_uploaded_handler)
-
-    def register_routes(self):
-        self.app.include_router(signup_router, prefix="/signup", tags=["Signup"])
-        self.app.include_router(otp_router, prefix="/phone", tags=["Phone"])
-        self.app.include_router(login_router, prefix="/login", tags=["Login"])
-        self.app.include_router(profile_router, prefix="/profile", tags=["Profile"])
-        self.app.include_router(gender_router, prefix="/gender", tags=["Gender"])
-        self.app.include_router(otp_router, prefix="/otp", tags=["OTP"])
-   
-        Base.metadata.create_all(bind=engine)
-        
-
-
-    try:
-        db = SessionLocal()
-        db.execute(text("SELECT 1"))
-        print("✅ PostgreSQL Connected Successfully!")
-        db.close()
-    except OperationalError as e:
-        print("❌ PostgreSQL Connection Failed:", e)
-
-    def get_app(self):
-        return self.app
-    
-        # history integration
-
-    history_manager = HistoryManager(
-        db_url=os.getenv("DATABASE_URL"),
-        bucket_name=os.getenv("AWS_BUCKET_NAME"),
-        aws_access_key=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-        region=os.getenv("AWS_REGION"),
-        logger=logger
-    )
-
-
-    app = FastAPI()
-
-    def get_app(self):
-        return self.app
+from .lip_sync import generate_lip_sync_json
 
 
 from fastapi import FastAPI
 from inai_project.app.history.history_manager import HistoryManager
 from inai_project.app.history import history_routes  # Make sure this import is correct
 from inai_project.app.signup import models as signup_models
+from inai_project.database import engine
 signup_models.Base.metadata.create_all(bind=engine)
 
 import logging
@@ -314,7 +205,9 @@ class INAIApplication:
             return self.templates.TemplateResponse("monitor.html", {
                 "request": request,
                 "key_usage": data["key_usage"],
-                "user_sessions": data["user_sessions"]
+                "user_sessions": data["user_sessions"],
+                "exhausted_keys": data["exhausted_keys"],     # ✅ missing
+                "transfer_log": data["transfer_log"],         
             })
 
         @self.app.post("/toggle")
@@ -631,7 +524,7 @@ class INAIApplication:
             "text": query
         })
 
-    # def run(self, host="0.0.0.0", port=7200):
+    # def run(self, host="0.0.0.0", port=4210):
     def run(self, host="0.0.0.0", port=8000):
         import uvicorn
         self.logger.info(f"🚀 Starting INAI on http://{host}:{port}")

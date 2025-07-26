@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>INAI Monitor</title>
+  <!-- <meta http-equiv="refresh" content="3"> -->
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
@@ -94,7 +95,54 @@
       </tr>
       {% endfor %}
     </tbody>
+
   </table>
+  <div class="section-title">❌ Exhausted API Keys</div>
+  <table>
+    <thead>
+      <tr>
+        <th>API Key</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for key in exhausted_keys %}
+      <tr>
+        <td>{{ key[:5] }}...{{ key[-4:] }}</td>
+      </tr>
+      {% endfor %}
+      {% if exhausted_keys|length == 0 %}
+      <tr><td>No exhausted keys</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+    <div class="section-title">🔁 Key Transfer Log</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>User ID</th>
+        <th>From Key</th>
+        <th>To Key</th>
+        <th>Reason</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in transfer_log|reverse %}
+      <tr>
+        <td>{{ entry.timestamp }}</td>
+        <td>{{ entry.user_id }}</td>
+        <td> {% if entry.from_key %} {{ entry.from_key[:5] }}...{{ entry.from_key[-4:] }}  {% else %} N/A {% endif %}</td>
+        <td>{{ entry.to_key[:5] }}...{{ entry.to_key[-4:] if entry.to_key else '' }}</td>
+        <td>{{ entry.reason }}</td>
+      </tr>
+      {% endfor %}
+      {% if transfer_log|length == 0 %}
+      <tr><td colspan="5">No key transfers yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
 
   <div class="timestamp">Last updated: {{ request.state.timestamp if request.state.timestamp else 'Now' }}</div>
 </body>

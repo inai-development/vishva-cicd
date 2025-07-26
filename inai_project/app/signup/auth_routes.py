@@ -43,8 +43,3 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         "token_type": "bearer"
     }
 
-
-
-
-
-
