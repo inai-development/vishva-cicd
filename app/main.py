@@ -209,9 +209,8 @@ class INAIApplication:
             return release_key_for_user(user_id)
         
 
-    def run(self, host="0.0.0.0", port=4210):
-    # def run(self, host="0.0.0.0", port=8000):
+    # def run(self, host="0.0.0.0", port=4210):
+    def run(self, host="0.0.0.0", port=8000):
         import uvicorn
         self.logger.info(f"🚀 Starting INAI on http://{host}:{port}")
         uvicorn.run(self.asgi_app, host=host, port=port, reload=True)
-        
