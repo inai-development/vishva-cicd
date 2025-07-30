@@ -32,8 +32,8 @@ class HistoryManager:
 
     async def init_db(self):
         try:
-            # ssl_context = ssl.create_default_context(cafile=r"D:\INAI_Backend_MD\certs\rds-ca.pem")
-            ssl_context = ssl.create_default_context(cafile=r"/home/ubuntu/INAI_Backend/certs/rds-ca.pem")
+            ssl_context = ssl.create_default_context(cafile=r"D:\INAI_Backend_MD\certs\rds-ca.pem")
+            # ssl_context = ssl.create_default_context(cafile=r"/home/ubuntu/INAI_Backend/certs/rds-ca.pem")
             self.pool = await asyncpg.create_pool(
                 dsn=self.db_url,
                 min_size=1,
@@ -44,15 +44,14 @@ class HistoryManager:
             async with self.pool.acquire() as conn:
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS conversations (
-                    id UUID PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    mode TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_archived BOOLEAN DEFAULT FALSE
-                )
-
+                        id UUID PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        mode TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        is_archived BOOLEAN DEFAULT FALSE
+                    )
                 """)
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS messages (
@@ -66,6 +65,7 @@ class HistoryManager:
                 """)
                 await conn.execute("""CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)""")
                 await conn.execute("""CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC)""")
+                await conn.execute("""CREATE INDEX IF NOT EXISTS idx_conversations_mode ON conversations(mode)""")
                 await conn.execute("""CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)""")
             self.logger.info("✅ Database tables created successfully.")
         except Exception as e:
@@ -97,28 +97,14 @@ class HistoryManager:
             conversation_id = self.active_conversations[user_id]
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow("""
-                    SELECT id FROM conversations WHERE id = $1
-                """, conversation_id)
+                    SELECT id FROM conversations WHERE id = $1 AND mode = $2
+                """, conversation_id, mode)
                 if row:
                     self.logger.info(f"📝 Using active conversation: {conversation_id} for user {user_id}")
                     return conversation_id
                 else:
                     del self.active_conversations[user_id]
         return await self.create_new_conversation(user_id, mode)
-
-    async def create_conversation(self, user_id: str, title: str, mode: str) -> str:
-        conversation_id = str(uuid.uuid4())
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("""
-                    INSERT INTO conversations (id, user_id, title, mode)
-                    VALUES ($1, $2, $3, $4)
-                """, conversation_id, user_id, title, mode)
-            self.logger.info(f"✅ Created conversation {conversation_id} for user {user_id}")
-            return conversation_id
-        except Exception as e:
-            self.logger.error(f"❌ Failed to create conversation: {e}")
-            raise
 
     async def save_message(self, conversation_id: str, role: str, content: str, audio_url: str = None):
         try:
@@ -174,16 +160,120 @@ class HistoryManager:
             self.logger.error(f"❌ Failed to get messages: {e}")
             return []
 
-    async def get_user_conversations(self, user_id: str) -> List[Dict]:
+    # Updated method: Get conversations by mode with proper grouping
+    async def get_user_conversations_by_mode(self, user_id: str, mode: str) -> List[Dict]:
         try:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch("""
-                    SELECT id, title, mode, created_at, updated_at, is_archived
+                    SELECT 
+                        c.id, 
+                        c.title, 
+                        c.mode, 
+                        c.created_at, 
+                        c.updated_at,
+                        c.is_archived,
+                        m.content as last_message,
+                        COUNT(msg.id) as message_count
+                    FROM conversations c
+                    LEFT JOIN LATERAL (
+                        SELECT content 
+                        FROM messages 
+                        WHERE conversation_id = c.id 
+                        ORDER BY created_at DESC 
+                        LIMIT 1
+                    ) m ON true
+                    LEFT JOIN messages msg ON msg.conversation_id = c.id
+                    WHERE c.user_id = $1 AND c.mode = $2 AND c.is_archived = false
+                    GROUP BY c.id, c.title, c.mode, c.created_at, c.updated_at, c.is_archived, m.content
+                    ORDER BY c.updated_at DESC
+                """, user_id, mode)
+            
+            conversations = []
+            for row in rows:
+                conv = dict(row)
+                if conv['last_message']:
+                    conv['preview'] = conv['last_message'][:50] + "..." if len(conv['last_message']) > 50 else conv['last_message']
+                else:
+                    conv['preview'] = "No messages yet"
+                conversations.append(conv)
+            
+            self.logger.info(f"📋 Found {len(conversations)} conversations for user {user_id} in mode {mode}")
+            return conversations
+        except Exception as e:
+            self.logger.error(f"❌ Failed to get mode-wise conversations for {user_id}: {e}")
+            return []
+
+    # New method: Get conversation modes summary
+    async def get_user_modes_summary(self, user_id: str) -> List[Dict]:
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT 
+                        mode,
+                        COUNT(*) as conversation_count,
+                        MAX(updated_at) as last_updated
                     FROM conversations
-                    WHERE user_id = $1
-                    ORDER BY updated_at DESC
+                    WHERE user_id = $1 AND is_archived = false
+                    GROUP BY mode
+                    ORDER BY last_updated DESC
                 """, user_id)
-            return [dict(row) for row in rows]
+            
+            modes_summary = []
+            for row in rows:
+                mode_data = dict(row)
+                # Add mode display names
+                mode_names = {
+                    'friend': 'Friend Mode',
+                    'information': 'Information Mode', 
+                    'love': 'Love Mode',
+                    'elder': 'Elder Mode'
+                }
+                mode_data['display_name'] = mode_names.get(mode_data['mode'], mode_data['mode'].title())
+                modes_summary.append(mode_data)
+            
+            self.logger.info(f"📊 Found {len(modes_summary)} active modes for user {user_id}")
+            return modes_summary
+        except Exception as e:
+            self.logger.error(f"❌ Failed to get modes summary for {user_id}: {e}")
+            return []
+
+    # Updated method: Get all conversations with better structure
+    async def get_user_conversations_with_preview(self, user_id: str) -> List[Dict]:
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT 
+                        c.id, 
+                        c.title, 
+                        c.mode, 
+                        c.created_at, 
+                        c.updated_at,
+                        c.is_archived,
+                        m.content as last_message,
+                        COUNT(msg.id) as message_count
+                    FROM conversations c
+                    LEFT JOIN LATERAL (
+                        SELECT content 
+                        FROM messages 
+                        WHERE conversation_id = c.id 
+                        ORDER BY created_at DESC 
+                        LIMIT 1
+                    ) m ON true
+                    LEFT JOIN messages msg ON msg.conversation_id = c.id
+                    WHERE c.user_id = $1 AND c.is_archived = false
+                    GROUP BY c.id, c.title, c.mode, c.created_at, c.updated_at, c.is_archived, m.content
+                    ORDER BY c.updated_at DESC
+                """, user_id)
+            
+            conversations = []
+            for row in rows:
+                conv = dict(row)
+                if conv['last_message']:
+                    conv['preview'] = conv['last_message'][:50] + "..." if len(conv['last_message']) > 50 else conv['last_message']
+                else:
+                    conv['preview'] = "No messages yet"
+                conversations.append(conv)
+            return conversations
         except Exception as e:
             self.logger.error(f"❌ Failed to get conversations for user {user_id}: {e}")
             return []
@@ -200,58 +290,22 @@ class HistoryManager:
             return None
 
     async def set_active_conversation(self, user_id: str, conversation_id: str):
-        self.active_conversations[user_id] = conversation_id
-        self.logger.info(f"🔄 Active conversation changed to {conversation_id} for user {user_id}")
-
-    async def get_user_conversations_by_mode(self, user_id: str, mode: str) -> List[Dict]:
+        # Verify conversation belongs to user
         try:
             async with self.pool.acquire() as conn:
-                rows = await conn.fetch("""
-                    SELECT id, title, mode, created_at, updated_at, is_archived
-                    FROM conversations
-                    WHERE user_id = $1 AND mode = $2 AND is_archived = false
-                    ORDER BY updated_at DESC
-                """, user_id, mode)
-            return [dict(row) for row in rows]
-        except Exception as e:
-            self.logger.error(f"❌ Failed to get mode-wise conversations for {user_id}: {e}")
-            return []
-
-    async def get_user_conversations_with_preview(self, user_id: str) -> List[Dict]:
-        try:
-            async with self.pool.acquire() as conn:
-                rows = await conn.fetch("""
-                    SELECT 
-                        c.id, 
-                        c.title, 
-                        c.mode, 
-                        c.created_at, 
-                        c.updated_at,
-                        c.is_archived,
-                        m.content as last_message
-                    FROM conversations c
-                    LEFT JOIN LATERAL (
-                        SELECT content 
-                        FROM messages 
-                        WHERE conversation_id = c.id 
-                        ORDER BY created_at DESC 
-                        LIMIT 1
-                    ) m ON true
-                    WHERE c.user_id = $1 AND c.is_archived = false
-                    ORDER BY c.updated_at DESC
-                """, user_id)
-            conversations = []
-            for row in rows:
-                conv = dict(row)
-                if conv['last_message']:
-                    conv['preview'] = conv['last_message'][:50] + "..." if len(conv['last_message']) > 50 else conv['last_message']
+                row = await conn.fetchrow("""
+                    SELECT id FROM conversations 
+                    WHERE id = $1 AND user_id = $2 AND is_archived = false
+                """, conversation_id, user_id)
+                
+                if row:
+                    self.active_conversations[user_id] = conversation_id
+                    self.logger.info(f"🔄 Active conversation changed to {conversation_id} for user {user_id}")
                 else:
-                    conv['preview'] = "No messages yet"
-                conversations.append(conv)
-            return conversations
+                    raise Exception("Conversation not found or doesn't belong to user")
         except Exception as e:
-            self.logger.error(f"❌ Failed to get conversations for user {user_id}: {e}")
-            return []
+            self.logger.error(f"❌ Failed to set active conversation: {e}")
+            raise
 
     async def archive_conversation(self, conversation_id: str, user_id: str):
         try:
@@ -261,8 +315,10 @@ class HistoryManager:
                     SET is_archived = true 
                     WHERE id = $1 AND user_id = $2
                 """, conversation_id, user_id)
+            
             if user_id in self.active_conversations and self.active_conversations[user_id] == conversation_id:
                 del self.active_conversations[user_id]
+            
             self.logger.info(f"🗄️ Archived conversation {conversation_id} for user {user_id}")
         except Exception as e:
             self.logger.error(f"❌ Failed to archive conversation: {e}")
@@ -280,3 +336,20 @@ class HistoryManager:
         except Exception as e:
             self.logger.error(f"❌ Failed to update conversation title: {e}")
             raise
+
+    # New method: Get conversation details with basic info
+    async def get_conversation_details(self, conversation_id: str, user_id: str) -> Optional[Dict]:
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow("""
+                    SELECT id, title, mode, created_at, updated_at, is_archived
+                    FROM conversations
+                    WHERE id = $1 AND user_id = $2
+                """, conversation_id, user_id)
+                
+                if row:
+                    return dict(row)
+                return None
+        except Exception as e:
+            self.logger.error(f"❌ Failed to get conversation details: {e}")
+            return None

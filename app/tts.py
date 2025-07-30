@@ -4,6 +4,7 @@ import uuid
 import base64
 import tempfile
 import edge_tts
+from langdetect import detect
 
 
 class TextToSpeech:
@@ -58,6 +59,15 @@ class TextToSpeech:
                       r'\U0001FA70-\U0001FAFF'
                       r'\U000025A0-\U000025FF]+', '', text)
         return text.strip()
+    
+
+
+    def _detect_language(self, text: str) -> str:
+        try:
+            return detect(text)
+        except Exception as e:
+            self.logger.warning(f"Language detection failed: {e}")
+            return "en"
 
     async def generate_tts_chunk(self, text: str, chunk_id: int) -> str:
         try:
@@ -65,9 +75,14 @@ class TextToSpeech:
 
             if not clean_text:
                 return ''
+            
+            voice = self.config.assistant_voice
+            if self.config.mode == "info":
+                lang = self._detect_language(clean_text)
+                voice = self.config.voice_map.get(lang, self.config.assistant_voice)
 
             output_file = f"Data/speech_chunk_{chunk_id}_{uuid.uuid4()}.mp3"
-            communicate = edge_tts.Communicate(clean_text, voice=self.config.assistant_voice)
+            communicate = edge_tts.Communicate(clean_text, voice=voice)
             await communicate.save(output_file)
 
             if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:

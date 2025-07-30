@@ -1,35 +1,29 @@
 import os
-import io
-import boto3
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from fastapi.security import OAuth2PasswordBearer
-from botocore.exceptions import BotoCoreError, ClientError
+from fastapi.responses import JSONResponse
 
 from inai_project.app.profile import models
 from inai_project.database import SessionLocal
 from inai_project.app.core import security
 from inai_project.app.signup import models as signup_models
+from inai_project.app.core.error_handler import InvalidTokenException
 
-# === Config ===
+
 router = APIRouter()
+
+UPLOAD_DIR = "uploads/profile_pics"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/signup/login/")
 SECRET_KEY = security.SECRET_KEY
 ALGORITHM = security.ALGORITHM
 
-# S3 Client setup
-s3 = boto3.client(
-    "s3",
-    region_name=os.getenv("AWS_REGION"),
-    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
-)
-S3_BUCKET = os.getenv("AWS_BUCKET_NAME")
 
-
-# === Dependencies ===
+# ✅ DB Session Dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -37,18 +31,20 @@ def get_db():
     finally:
         db.close()
 
+
+# ✅ Decode token and extract user_id
 def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id_str = payload.get("sub")
-        if user_id_str is None:
-            raise HTTPException(status_code=401, detail="Invalid token: no user_id")
-        return int(user_id_str)
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
+        user_id = payload.get("sub")
+        if not user_id:
+            raise InvalidTokenException()
+        return int(user_id)
+    except JWTError:
+        raise InvalidTokenException()
 
 
-# === Upload Profile Picture ===
+# ✅ Upload profile photo
 @router.post("/upload/")
 async def upload_profile_pic(
     file: UploadFile = File(...),
@@ -58,29 +54,19 @@ async def upload_profile_pic(
     if not file:
         raise HTTPException(status_code=400, detail="No file provided")
 
-    if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+    allowed_extensions = ('.png', '.jpg', '.jpeg', '.webp')
+    if not file.filename.lower().endswith(allowed_extensions):
         return JSONResponse(
             status_code=400,
             content={"status": False, "message": "Unsupported file format"}
         )
 
     try:
-        # Prepare file and S3 key
-        file_data = await file.read()
-        s3_key = f"profile_pics/{user_id}_{file.filename}"
+        filename = f"{uuid.uuid4().hex}_{file.filename}"
+        file_location = os.path.join(UPLOAD_DIR, filename)
+        with open(file_location, "wb") as f:
+            f.write(await file.read())
 
-        # Upload to S3
-        s3.upload_fileobj(
-            Fileobj=io.BytesIO(file_data),
-            Bucket=S3_BUCKET,
-            Key=s3_key,
-            ExtraArgs={"ContentType": file.content_type}
-        )
-
-        # Generate public URL
-        file_location = f"https://{S3_BUCKET}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{s3_key}"
-
-        # Get user and update/create profile
         user_account = db.query(signup_models.User).filter(signup_models.User.id == user_id).first()
         if not user_account:
             raise HTTPException(status_code=404, detail="User not found")
@@ -91,6 +77,7 @@ async def upload_profile_pic(
 
         if not user_profile:
             user_profile = models.UserProfile(
+                user_id=user_account.id,
                 username=user_account.username,
                 profile_photo=file_location
             )
@@ -102,13 +89,73 @@ async def upload_profile_pic(
         db.refresh(user_profile)
 
         return {
-            "message": "Profile photo uploaded",
+            "message": "Profile photo uploaded successfully",
+            "user_id": user_account.id,
             "username": user_profile.username,
             "profile_photo": user_profile.profile_photo
         }
 
-    except (BotoCoreError, ClientError) as s3_err:
-        raise HTTPException(status_code=500, detail=f"S3 upload failed: {str(s3_err)}")
+    except Exception as e:
+        print("Upload Error:", e)
+        raise HTTPException(status_code=500, detail="Profile photo upload failed. Try again.")
+
+
+# ✅ Update profile username and/or photo
+@router.patch("/update/")
+async def update_profile(
+    new_username: str = Form(None),
+    file: UploadFile = File(None),
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id)
+):
+    user_account = db.query(signup_models.User).filter(signup_models.User.id == user_id).first()
+    if not user_account:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        user_profile = db.query(models.UserProfile).filter(
+            models.UserProfile.username == user_account.username
+        ).first()
+
+        if not user_profile:
+            user_profile = models.UserProfile(
+                username=user_account.username,
+                user_id=user_account.id
+            )
+            db.add(user_profile)
+            db.commit()
+            db.refresh(user_profile)
+
+        if new_username:
+            # ✅ Check if username already taken
+            existing_user = db.query(signup_models.User).filter(signup_models.User.username == new_username).first()
+            if existing_user and existing_user.id != user_id:
+                raise HTTPException(status_code=409, detail="Username already exists")
+
+            user_account.username = new_username
+            user_profile.username = new_username
+
+        if file:
+            if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                return JSONResponse(
+                    status_code=400,
+                    content={"status": False, "message": "Unsupported file format"}
+                )
+            filename = f"{uuid.uuid4().hex}_{file.filename}"
+            file_location = os.path.join(UPLOAD_DIR, filename)
+            with open(file_location, "wb") as f:
+                f.write(await file.read())
+            user_profile.profile_photo = file_location
+
+        db.commit()
+        db.refresh(user_profile)
+
+        return {
+            "message": "Profile updated successfully",
+            "username": user_profile.username,
+            "profile_photo": user_profile.profile_photo
+        }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Profile photo upload failed. Try again.")
+        print("Update Error:", e)
+        raise HTTPException(status_code=500, detail="Profile update failed. Try again.")

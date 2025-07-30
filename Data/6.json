@@ -1,0 +1,69 @@
+{
+  "mouthCues": [
+    {
+      "value": "X",
+      "start": 0.0,
+      "end": 0.227
+    },
+    {
+      "value": "B",
+      "start": 0.227,
+      "end": 0.454
+    },
+    {
+      "value": "G",
+      "start": 0.454,
+      "end": 0.681
+    },
+    {
+      "value": "X",
+      "start": 0.681,
+      "end": 0.908
+    },
+    {
+      "value": "X",
+      "start": 0.908,
+      "end": 0.976
+    },
+    {
+      "value": "X",
+      "start": 0.976,
+      "end": 1.203
+    },
+    {
+      "value": "E",
+      "start": 1.203,
+      "end": 1.43
+    },
+    {
+      "value": "X",
+      "start": 1.43,
+      "end": 1.656
+    },
+    {
+      "value": "X",
+      "start": 1.656,
+      "end": 1.725
+    },
+    {
+      "value": "X",
+      "start": 1.725,
+      "end": 1.951
+    },
+    {
+      "value": "X",
+      "start": 1.951,
+      "end": 2.178
+    },
+    {
+      "value": "X",
+      "start": 2.178,
+      "end": 2.405
+    },
+    {
+      "value": "X",
+      "start": 2.405,
+      "end": 2.632
+    }
+  ]
+}

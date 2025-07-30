@@ -4,33 +4,31 @@ from dotenv import load_dotenv
 class Config:
     def __init__(self):
         self.env_path = ".env"
-        
-        # ✅ Load all environment variables directly into os.environ
         load_dotenv(self.env_path, override=True)
         self.env_vars = os.environ
 
-        # ✅ Load and split all API keys
         self.api_keys = self._load_api_keys()
         if not self.api_keys:
             raise ValueError("❌ OPENAI_API_KEY is missing in .env")
 
-        # ✅ Default Groq key (2nd if available)
         self.groq_api_key = self.api_keys[1] if len(self.api_keys) >= 2 else self.api_keys[0]
 
-        # ✅ Other configs
         self.assistant_voice = self.get("AssistantVoice", "en-IN-NeerjaExpressiveNeural")
+        self.voice_map = {
+            "en": "en-IN-NeerjaExpressiveNeural",
+            "hi": "hi-IN-SwaraNeural",
+            "gu": "gu-IN-DhwaniNeural"
+        }
+        self.mode = os.getenv("ASSISTANT_MODE", "info")
         self.maintenance_password = self.get("TOGGLE_PASSWORD")
         self.toggle_key = self.get("TOGGLE_KEY", "off").lower()
 
-        # ✅ Static and data folders
         self.static_dir = os.path.join(os.getcwd(), "static")
         os.makedirs(self.static_dir, exist_ok=True)
         os.makedirs("Data", exist_ok=True)
 
-        # ✅ Clean up temp audio files
         self.cleanup_temp_files()
 
-        # ✅ Final logs
         print(f"🔐 Loaded API keys: {len(self.api_keys)}")
         print(f"🧠 Using Groq Key: {self.groq_api_key[:30]}...")
 

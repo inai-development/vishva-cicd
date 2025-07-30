@@ -10,10 +10,10 @@ from langdetect import detect
 from langdetect.detector_factory import DetectorFactory
 
 
-# os.environ["PATH"] += os.pathsep + r"D:\AA\vishume\ffmpeg\bin"
-# AudioSegment.converter = r"D:\AA\vishume\ffmpeg\bin\ffmpeg.exe"
+os.environ["PATH"] += os.pathsep + r"D:\AA\vishume\ffmpeg\bin"
+AudioSegment.converter = r"D:\AA\vishume\ffmpeg\bin\ffmpeg.exe"
 
-AudioSegment.converter = "ffmpeg"
+# AudioSegment.converter = "ffmpeg"
 
 
 DetectorFactory.seed = 0
@@ -21,15 +21,15 @@ warnings.filterwarnings("ignore")
 
 # ------------------- SHAPE KEY MAPPING -------------------
 shape_key_map = {
-    "A": ["aa", "ae", "ah", "ao", "aw", "ay", "a", "e", "i", "o", "u", "uh", "uw"],
-    "B": ["b", "p", "m", "em", "bm"],
-    "C": ["ch", "jh", "sh", "zh"],
-    "D": ["d", "dh", "t", "th", "n", "nd", "nt"],
-    "E": ["eh", "ey", "iy", "y", "ee", "ih"],
-    "F": ["f", "v", "w", "wh"],
-    "G": ["g", "gh", "k", "kh", "ng"],
-    "H": ["h", "hh", "l", "r", "s", "z", "ll", "rr"],
-    "X": [" ", "sil", "sp", "pause"]
+    "A":["m","b","p","em","bm","i"],
+    "B":["d","t","n","l","s","z","e","nd","nt"],
+    "C":["k","g","gh","kh","ng"],
+    "D":["r","rr","ll","ey","er","dh"],
+    "E":["u","uw","o","w","wh","ch","jh","sh","zh","th"],
+    "F":["f","v"],
+    "G":["hh","h","uh","ih"],
+    "H":["aa","ae","ah","ao","aw","ay","a","eh","iy","ee","y"],
+    "x":[" ", "sil", "sp", "pause"]
 }
 phoneme_to_shape = {}
 for shape, phonemes in shape_key_map.items():

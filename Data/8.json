@@ -1,0 +1,249 @@
+{
+  "mouthCues": [
+    {
+      "value": "X",
+      "start": 0.0,
+      "end": 0.141
+    },
+    {
+      "value": "X",
+      "start": 0.141,
+      "end": 0.283
+    },
+    {
+      "value": "X",
+      "start": 0.283,
+      "end": 0.325
+    },
+    {
+      "value": "B",
+      "start": 0.325,
+      "end": 0.467
+    },
+    {
+      "value": "E",
+      "start": 0.467,
+      "end": 0.608
+    },
+    {
+      "value": "X",
+      "start": 0.608,
+      "end": 0.651
+    },
+    {
+      "value": "G",
+      "start": 0.651,
+      "end": 0.792
+    },
+    {
+      "value": "X",
+      "start": 0.792,
+      "end": 0.934
+    },
+    {
+      "value": "X",
+      "start": 0.934,
+      "end": 1.075
+    },
+    {
+      "value": "X",
+      "start": 1.075,
+      "end": 1.217
+    },
+    {
+      "value": "X",
+      "start": 1.217,
+      "end": 1.259
+    },
+    {
+      "value": "F",
+      "start": 1.259,
+      "end": 1.401
+    },
+    {
+      "value": "A",
+      "start": 1.401,
+      "end": 1.542
+    },
+    {
+      "value": "D",
+      "start": 1.542,
+      "end": 1.684
+    },
+    {
+      "value": "X",
+      "start": 1.684,
+      "end": 1.825
+    },
+    {
+      "value": "X",
+      "start": 1.825,
+      "end": 1.966
+    },
+    {
+      "value": "X",
+      "start": 1.966,
+      "end": 2.108
+    },
+    {
+      "value": "X",
+      "start": 2.108,
+      "end": 2.249
+    },
+    {
+      "value": "X",
+      "start": 2.249,
+      "end": 2.292
+    },
+    {
+      "value": "X",
+      "start": 2.292,
+      "end": 2.433
+    },
+    {
+      "value": "X",
+      "start": 2.433,
+      "end": 2.575
+    },
+    {
+      "value": "X",
+      "start": 2.575,
+      "end": 2.716
+    },
+    {
+      "value": "X",
+      "start": 2.716,
+      "end": 2.858
+    },
+    {
+      "value": "X",
+      "start": 2.858,
+      "end": 2.9
+    },
+    {
+      "value": "X",
+      "start": 2.9,
+      "end": 3.042
+    },
+    {
+      "value": "X",
+      "start": 3.042,
+      "end": 3.183
+    },
+    {
+      "value": "X",
+      "start": 3.183,
+      "end": 3.325
+    },
+    {
+      "value": "X",
+      "start": 3.325,
+      "end": 3.367
+    },
+    {
+      "value": "E",
+      "start": 3.367,
+      "end": 3.509
+    },
+    {
+      "value": "A",
+      "start": 3.509,
+      "end": 3.65
+    },
+    {
+      "value": "A",
+      "start": 3.65,
+      "end": 3.791
+    },
+    {
+      "value": "X",
+      "start": 3.791,
+      "end": 3.834
+    },
+    {
+      "value": "H",
+      "start": 3.834,
+      "end": 3.975
+    },
+    {
+      "value": "A",
+      "start": 3.975,
+      "end": 4.117
+    },
+    {
+      "value": "X",
+      "start": 4.117,
+      "end": 4.159
+    },
+    {
+      "value": "H",
+      "start": 4.159,
+      "end": 4.301
+    },
+    {
+      "value": "A",
+      "start": 4.301,
+      "end": 4.442
+    },
+    {
+      "value": "X",
+      "start": 4.442,
+      "end": 4.584
+    },
+    {
+      "value": "X",
+      "start": 4.584,
+      "end": 4.626
+    },
+    {
+      "value": "X",
+      "start": 4.626,
+      "end": 4.768
+    },
+    {
+      "value": "X",
+      "start": 4.768,
+      "end": 4.909
+    },
+    {
+      "value": "X",
+      "start": 4.909,
+      "end": 4.952
+    },
+    {
+      "value": "X",
+      "start": 4.952,
+      "end": 5.093
+    },
+    {
+      "value": "X",
+      "start": 5.093,
+      "end": 5.235
+    },
+    {
+      "value": "X",
+      "start": 5.235,
+      "end": 5.376
+    },
+    {
+      "value": "X",
+      "start": 5.376,
+      "end": 5.418
+    },
+    {
+      "value": "H",
+      "start": 5.418,
+      "end": 5.56
+    },
+    {
+      "value": "A",
+      "start": 5.56,
+      "end": 5.701
+    },
+    {
+      "value": "A",
+      "start": 5.701,
+      "end": 5.843
+    }
+  ]
+}

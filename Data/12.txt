@@ -1,0 +1,19 @@
+Here is a full Python code for a "Hello, World!" program:
+
+```python
+# This is a comment - anything after the "#" symbol is ignored by the interpreter
+
+print("Hello, World!")  # This line prints "Hello, World!" to the console
+```
+
+If you want a more traditional "Hello, World!" program with a `main` function, here is an example:
+
+```python
+def main():
+    print("Hello, World!")
+
+if __name__ == "__main__":
+    main()
+```
+
+This code defines a `main` function that prints "Hello, World!" to the console. The `if __name__ == "__main__":` block is used to ensure that the `main` function is only executed when the script is run directly (i.e., not when it's imported as a module by another script).
