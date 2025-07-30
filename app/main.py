@@ -214,3 +214,4 @@ class INAIApplication:
         import uvicorn
         self.logger.info(f"🚀 Starting INAI on http://{host}:{port}")
         uvicorn.run(self.asgi_app, host=host, port=port, reload=True)
+        
