@@ -1,19 +1,12 @@
-Here is a full Python code for a "Hello, World!" program:
+Here's an explanation of Artificial Intelligence (AI) in Gujarati:
 
-```python
-# This is a comment - anything after the "#" symbol is ignored by the interpreter
+**આર્ટિફિશિયલ ઇન્ટેલિજન્સ (AI)**
 
-print("Hello, World!")  # This line prints "Hello, World!" to the console
-```
+આર્ટિફિશિયલ ઇન્ટેલિજન્સ એટલે કમ્પ્યુટર સિસ્ટમ દ્વારા માનવીય બુદ્ધિની કામગીરી કરવાની ક્ષમતા છે. આ ટેકનોલોજી કમ્પ્યુટરને સ્વયં નિર્ણય લેવાની ક્ષમતા આપે છે.
 
-If you want a more traditional "Hello, World!" program with a `main` function, here is an example:
+**આર્ટિફિશિયલ ઇન્ટેલિજન્સના પ્રકાર**
 
-```python
-def main():
-    print("Hello, World!")
+1. **મશીન લર્નિંગ (Machine Learning)**: આ પ્રકારમાં કમ્પ્યુટર પોતાની જાતે નવા નિર્ણય લેવાની ક્ષમતા વિકસાવે છે.
+2. **નેચરલ લેંગ્વેજ પ્રોસેસિંગ (NLP)**: આ પ્રકારમાં કમ્પ્યુટર માનવીય ભાષાને સમજે છે અને તેના આધારે નિર્ણય લેવાની ક્ષમતા છે.
 
-if __name__ == "__main__":
-    main()
-```
-
-This code defines a `main` function that prints "Hello, World!" to the console. The `if __name__ == "__main__":` block is used to ensure that the `main` function is only executed when the script is run directly (i.e., not when it's imported as a module by another script).
+આર્ટિફિશિયલ ઇન્ટેલિજન્સનો ઉપયોગ વિવિધ ક્ષેત્રોમાં થાય છે, જેમ કે રોબોટિક્સ, ગેમિંગ, સ્વાસ્થ્ય સંભાળ, અને વિવિધ ઉદ્યોગોમાં.

@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import datetime
+from datetime import datetime
 import os
 import logging
 import socketio
@@ -89,6 +89,7 @@ class INAIApplication:
             self.socket_handler.setup_socket_events()
         else:
             self.logger.warning(":warning: Socket is OFF due to maintenance mode")
+ 
     def setup_routes(self):
         frontend_dir = os.path.join(os.getcwd(), "frontend")
         self.app.mount("/frontend", StaticFiles(directory=frontend_dir), name="frontend")
@@ -105,6 +106,7 @@ class INAIApplication:
                     return HTMLResponse(content=f.read())
             except FileNotFoundError:
                 return HTMLResponse(content="<h1>UI not found</h1>", status_code=404)
+
         @self.app.get("/status")
         async def get_status():
             self.config.reload_env()
@@ -112,10 +114,12 @@ class INAIApplication:
                 "maintenance": self.config.is_maintenance_on(),
                 "socket": self.config.is_socket_on()
             }
+ 
         @self.app.get("/INAI520", response_class=HTMLResponse)
         async def admin_panel(request: Request):
             error = request.query_params.get("error")
             return self.templates.TemplateResponse("login.html", {"request": request, "error": error})
+ 
         @self.app.post("/INAI520", response_class=RedirectResponse)
         async def verify_admin(req: Request):
             form = await req.form()
@@ -125,6 +129,7 @@ class INAIApplication:
             response = RedirectResponse(url="/INAI520/home", status_code=303)
             response.set_cookie("INAI520", password)
             return response
+  
         @self.app.get("/audio/{filename}", response_class=FileResponse)
         async def serve_audio_file(filename: str):
             file_path = os.path.abspath(os.path.join("Data", filename))
@@ -138,6 +143,7 @@ class INAIApplication:
                 return FileResponse(file_path, media_type="audio/mpeg")
             else:
                 raise HTTPException(status_code=400, detail="Unsupported audio format")
+  
         @self.app.get("/viseme/{filename}", response_class=FileResponse)
         async def serve_viseme_file(filename: str):
             if not filename.endswith(".json"):
@@ -146,11 +152,13 @@ class INAIApplication:
             if not os.path.isfile(file_path):
                 raise HTTPException(status_code=404, detail="JSON file not found")
             return FileResponse(file_path, media_type="application/json")
+   
         @self.app.get("/INAI520/home", response_class=HTMLResponse)
         async def admin_home(request: Request):
             if request.cookies.get("INAI520") != os.getenv("TOGGLE_PASSWORD"):
                 return RedirectResponse(url="/INAI520")
             return self.templates.TemplateResponse("admin_panel.html", {"request": request})
+   
         @self.app.get("/INAI520/maintenance", response_class=HTMLResponse)
         async def admin_maintenance(request: Request):
             if request.cookies.get("INAI520") != os.getenv("TOGGLE_PASSWORD"):
@@ -160,6 +168,7 @@ class INAIApplication:
                 "socket": self.config.is_socket_on(),
                 "maintenance": self.config.is_maintenance_on(),
             })
+  
         @self.app.get("/INAI520/monitor", response_class=HTMLResponse)
         async def monitor_ui(request: Request):
             if request.cookies.get("INAI520") != os.getenv("TOGGLE_PASSWORD"):
@@ -169,10 +178,9 @@ class INAIApplication:
             return self.templates.TemplateResponse("monitor.html", {
                 "request": request,
                 "key_usage": data["key_usage"],
-                "user_sessions": data["user_sessions"],
-                "exhausted_keys": data["exhausted_keys"],
-                "transfer_log": data["transfer_log"],
+                "user_sessions": data["user_sessions"]
             })
+   
         @self.app.post("/toggle")
         async def toggle(req: ToggleRequest):
             if not self.config.toggle_state(req.password):
@@ -188,6 +196,7 @@ class INAIApplication:
                 "maintenance": self.config.is_maintenance_on(),
                 "socket": self.config.is_socket_on()
             }
+  
         @self.app.post("/login")
         async def login(req: ToggleRequest):
             if req.password != os.getenv("TOGGLE_PASSWORD"):
@@ -196,12 +205,14 @@ class INAIApplication:
                 "maintenance": self.config.is_maintenance_on(),
                 "socket": self.config.is_socket_on()
             }
+  
         @self.app.post("/assign-key")
         async def assign_key(request: Request):
             data = await request.json()
             user_id = data.get("user_id")
             task = data.get("task", "Unknown")
             return assign_key_to_user(user_id, task)
+  
         @self.app.post("/release-key")
         async def release_key(request: Request):
             data = await request.json()
@@ -214,3 +225,4 @@ class INAIApplication:
         import uvicorn
         self.logger.info(f"🚀 Starting INAI on http://{host}:{port}")
         uvicorn.run(self.asgi_app, host=host, port=port, reload=True)
+        
