@@ -173,12 +173,15 @@ class INAIApplication:
         async def monitor_ui(request: Request):
             if request.cookies.get("INAI520") != os.getenv("TOGGLE_PASSWORD"):
                 return RedirectResponse(url="/INAI520")
+            
             data = get_monitor_data()
             request.state.timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            
             return self.templates.TemplateResponse("monitor.html", {
                 "request": request,
-                "key_usage": data["key_usage"],
-                "user_sessions": data["user_sessions"]
+                "current_index": data["current_index"],
+                "user_sessions": data["user_sessions"],
+                "key_usage": data["key_usage"]
             })
    
         @self.app.post("/toggle")

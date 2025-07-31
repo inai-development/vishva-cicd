@@ -44,7 +44,7 @@ async def register_user(user: schemas.UserCreate, db: Session = Depends(get_db))
         new_user = User(
             username=google_user["username"],
             email=google_user["email"],
-            hashed_password=None,
+            hashed_password=pwd_context.hash(str(uuid.uuid4())),  # Dummy hashed pw
             google_id=google_user["google_id"],
             login_method="google",
             is_verified=True
@@ -61,7 +61,7 @@ async def register_user(user: schemas.UserCreate, db: Session = Depends(get_db))
         new_user = User(
             username=fb_username,
             email=fb_email,
-            hashed_password=None,
+            hashed_password=pwd_context.hash(str(uuid.uuid4())),  # Dummy hashed pw
             facebook_id=user.facebook_id,
             login_method="facebook",
             is_verified=True
@@ -75,7 +75,6 @@ async def register_user(user: schemas.UserCreate, db: Session = Depends(get_db))
         if db.query(User).filter(User.username == user.username).first():
             raise HTTPException(status_code=400, detail="Username already taken")
 
-        # ✅ HASH PASSWORD HERE
         hashed_password = pwd_context.hash(user.password)
         otp = str(random.randint(100000, 999999))
 
@@ -135,5 +134,3 @@ def get_user_profile(current_user: User = Depends(get_current_user)):
         "username": current_user.username,
         "email": current_user.email
     }
-
-

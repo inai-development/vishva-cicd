@@ -44,4 +44,4 @@ class ChatManager:
 
         except Exception as e:
             self.logger.error(f"Groq error for user {user_id}: {e}")
-            return "⚠️ I'm having trouble responding right now."
+            return "⚠️ I had trouble to understanding. Can you ask again?"
