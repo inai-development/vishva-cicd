@@ -96,6 +96,6 @@
     </tbody>
   </table>
 
-  <div class="timestamp">Last updated: {{ request.state.timestamp if request.state.timestamp else 'Now' }}</div>
+  <div class="timestamp">Last updated: {{ request.state.timestamp | default('Now', true) }}</div>
 </body>
 </html>

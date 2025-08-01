@@ -1,8 +1,6 @@
-import socketio
 import asyncio
 import base64
 import random
-from datetime import datetime
 from .key_manager import assign_key_to_user, release_key_for_user, update_last_active
 from .lip_sync import generate_lip_sync_json
 import os
@@ -125,44 +123,8 @@ class SocketHandler:
             if phrase in query_lower and target_mode != mode:
                 session['current_mode'] = target_mode
                 await self.sio.emit("mode_change", {"mode": target_mode}, room=sid)
-                confirm_text = self.modes.mode_confirmations[target_mode]
                 self.session_manager.cancel_user_tasks(user_id)
-                if target_mode == "info":
-                    await self.sio.emit("response", {"text": confirm_text, "audio": "", "visemes": ""}, room=sid)
-                    await self.handle_streaming_tts_for_info(user_id, confirm_text, sid)
-                else:
-                    try:
-                        confirm_audio_base64 = await self.tts.generate_tts(confirm_text, user_id, target_mode)
-                        audio_path = os.path.join("Data", f"{user_id}_mode_confirm.wav")
-                        text_path = os.path.join("Data", f"{user_id}_mode_confirm.txt")
-                        json_path = os.path.join("Data", f"{user_id}_mode_confirm.json")
-                        json_url = f"/viseme/{user_id}_mode_confirm.json"
-                        with open(text_path, "w", encoding="utf-8") as f:
-                            f.write(confirm_text)
-                        if confirm_audio_base64:
-                            audio_bytes = base64.b64decode(confirm_audio_base64)
-                            with open(audio_path, "wb") as f:
-                                f.write(audio_bytes)
-                            generate_lip_sync_json(audio_path, text_path, json_path)
-                            await self.sio.emit("response", {
-                                "text": confirm_text,
-                                "audio": confirm_audio_base64,
-                                "visemes": json_url
-                            }, room=sid)
-                        else:
-                            await self.sio.emit("response", {
-                                "text": confirm_text,
-                                "audio": "",
-                                "visemes": ""
-                            }, room=sid)
-                    except Exception as lip_sync_error:
-                        self.logger.error(f"Lip sync error for mode confirmation {user_id}: {lip_sync_error}")
-                        await self.sio.emit("response", {
-                            "text": confirm_text,
-                            "audio": confirm_audio_base64,
-                            "visemes": ""
-                        }, room=sid)
-                return
+                return 
 
         if mode != "info" and any(word in query_lower for word in ["stop", "wait", "ruko", "arre", "sun"]):
             self.session_manager.cancel_user_tasks(user_id)

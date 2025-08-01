@@ -2,7 +2,6 @@ import os
 import re
 import uuid
 import base64
-import tempfile
 import edge_tts
 from langdetect import detect
 
@@ -15,7 +14,7 @@ class TextToSpeech:
 
     def split_into_sentence_chunks(self, text, max_sentences_per_chunk=2):
 
-        text = re.sub(r"\((.*?)\)", r"\1", text)  # Remove parentheses
+        text = re.sub(r"\((.*?)\)", r"\1", text) 
         text = re.sub(r"(.?)", r"\1", text).strip()
 
         if not text:

@@ -57,5 +57,7 @@ async def shutdown():
 
 if __name__ == "__main__":
     import uvicorn
-    # uvicorn.run(sio_app, host="0.0.0.0", port=4210)
-    uvicorn.run(sio_app, host="0.0.0.0", port=8000)
+    host="0.0.0.0"
+    port=8000
+    logger.info(f"🚀 Starting INAI on http://{host}:{port}")
+    uvicorn.run(sio_app, host=host, port=port , reload=True)

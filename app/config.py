@@ -1,15 +1,17 @@
 import os
 from dotenv import load_dotenv
+from typing import List
+
 
 class Config:
-    def __init__(self):
-        self.env_path = ".env"
+    def __init__(self, env_path: str = None):
+        self.env_path = env_path or os.path.join(os.getcwd(), ".env")
         load_dotenv(self.env_path, override=True)
         self.env_vars = os.environ
 
-        self.api_keys = self._load_api_keys()
+        self.api_keys: List[str] = self._load_api_keys()
         if not self.api_keys:
-            raise ValueError("❌ OPENAI_API_KEY is missing in .env")
+            raise ValueError("❌ OPENAI_API_KEY is missing or empty in .env")
 
         self.groq_api_key = self.api_keys[1] if len(self.api_keys) >= 2 else self.api_keys[0]
 
@@ -19,7 +21,8 @@ class Config:
             "hi": "hi-IN-SwaraNeural",
             "gu": "gu-IN-DhwaniNeural"
         }
-        self.mode = os.getenv("ASSISTANT_MODE", "info")
+
+        self.mode = self.get("ASSISTANT_MODE", "info")
         self.maintenance_password = self.get("TOGGLE_PASSWORD")
         self.toggle_key = self.get("TOGGLE_KEY", "off").lower()
 
@@ -32,7 +35,7 @@ class Config:
         print(f"🔐 Loaded API keys: {len(self.api_keys)}")
         print(f"🧠 Using Groq Key: {self.groq_api_key[:30]}...")
 
-    def _load_api_keys(self):
+    def _load_api_keys(self) -> List[str]:
         keys = self.get("OPENAI_API_KEY", "")
         return [k.strip() for k in keys.split(",") if k.strip()]
 
@@ -50,10 +53,10 @@ class Config:
         self.env_vars = os.environ
         self.toggle_key = self.get("TOGGLE_KEY", "off").lower()
 
-    def is_maintenance_on(self):
+    def is_maintenance_on(self) -> bool:
         return self.toggle_key == "on"
 
-    def is_socket_on(self):
+    def is_socket_on(self) -> bool:
         return self.toggle_key == "off"
 
     def toggle_state(self, password: str) -> bool:
@@ -65,7 +68,7 @@ class Config:
         self.reload_env()
         return True
 
-    def get(self, key, default=None):
+    def get(self, key: str, default=None) -> str:
         return self.env_vars.get(key, default)
 
     def _set_env_value(self, key: str, value: str):

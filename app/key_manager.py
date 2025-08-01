@@ -1,32 +1,25 @@
-import os
 from dotenv import dotenv_values
 from typing import Dict
 from uuid import uuid4
 from threading import Lock
 from datetime import datetime
+from config import Config
 
-# ✅ Load environment variables from .env file
-env_vars = dotenv_values(".env")
+config = Config()
 
-# ✅ Load all API keys as a list
-api_keys = [k.strip() for k in env_vars.get("OPENAI_API_KEY", "").split(",") if k.strip()]
+api_keys = config.api_keys
 if not api_keys:
     raise ValueError("❌ No API keys found in OPENAI_API_KEY")
 
-# ✅ Globals
 user_sessions: Dict[str, Dict] = {}
 key_usage_count: Dict[str, int] = {key: 0 for key in api_keys}
 lock = Lock()
-current_index = 0  # Round-robin index tracker
 
-# ✅ Debug print
 print(f"🔐 Loaded {len(api_keys)} API keys")
 for i, key in enumerate(api_keys):
     print(f"[{i+1:02d}] {key[:10]}...")
 
-# ✅ Assign key to user (round-robin, no limits)
 def assign_key_to_user(user_id: str, task: str = "Unknown Task") -> Dict:
-    global current_index
     with lock:
         if user_id in user_sessions:
             return {
@@ -34,12 +27,11 @@ def assign_key_to_user(user_id: str, task: str = "Unknown Task") -> Dict:
                 "message": "Already assigned"
             }
 
-        key = api_keys[current_index]
-        current_index = (current_index + 1) % len(api_keys)
+        min_usage = min(key_usage_count.values())
+        candidates = [key for key, count in key_usage_count.items() if count == min_usage]
+        key = candidates[0]  
 
-        # Track usage
         key_usage_count[key] += 1
-
         session_id = str(uuid4())
         user_sessions[user_id] = {
             "session_id": session_id,
@@ -52,10 +44,9 @@ def assign_key_to_user(user_id: str, task: str = "Unknown Task") -> Dict:
 
         return {
             "api_key": key,
-            "message": f"✅ Assigned key {api_keys.index(key)+1} to {user_id}"
+            "message": f"✅ Assigned least-loaded key {api_keys.index(key)+1} to {user_id}"
         }
 
-# ✅ Update user session activity
 def update_last_active(user_id: str, sid: str = None):
     with lock:
         if user_id in user_sessions:
@@ -63,7 +54,6 @@ def update_last_active(user_id: str, sid: str = None):
             if sid:
                 user_sessions[user_id]["sid"] = sid
 
-# ✅ Release a key when a user disconnects
 def release_key_for_user(user_id: str) -> Dict:
     with lock:
         session = user_sessions.pop(user_id, None)
@@ -74,12 +64,10 @@ def release_key_for_user(user_id: str) -> Dict:
             return {"message": f"✅ Released key for {user_id}"}
         return {"error": "⚠️ User session not found or already released"}
 
-# ✅ Admin: Monitor usage and sessions
 def get_monitor_data() -> Dict:
     with lock:
         return {
             "total_keys": len(api_keys),
-            "current_index": current_index,
             "key_usage": key_usage_count,
             "user_sessions": {
                 user_id: {

@@ -1,6 +1,5 @@
 import os
 import json
-import uuid
 import warnings
 from typing import List, Tuple, Dict
 
@@ -54,7 +53,6 @@ def detect_silence(audio: AudioSegment,
     samples = samples.astype(np.float32) / 32768.0
     window_size = int(0.02 * sr)
     hop_size = window_size // 2
-    min_silence_samples = int(min_silence_duration * sr)
 
     rms = []
     for i in range(0, len(samples), hop_size):
@@ -183,22 +181,10 @@ def generate_lip_sync_json(input_audio_path: str, input_text_path: str, output_j
         if not text:
             raise ValueError("Text file is empty.")
 
-        print(":earth_africa: Detecting language...")
         lang = detect(text)[:2]
-        print(f"→ Detected language: {lang}")
-
-        print(":abc: Converting text to phonemes...")
         phonemes = text_to_phonemes(text, lang)
-        print(f"→ Phonemes: {' '.join(phonemes)}")
-
-        print(":headphones: Loading audio...")
         audio = AudioSegment.from_file(input_audio_path)
-        duration = len(audio) / 1000
-        print(f"→ Audio duration: {duration:.2f}s")
-
-        print(":jigsaw: Generating mouth cues...")
         mapping = generate_value_mapping(phonemes, audio)
-        print(f"→ Generated {len(mapping)} mouth cues")
 
         print(":floppy_disk: Saving output JSON...")
         os.makedirs(os.path.dirname(output_json_path), exist_ok=True)

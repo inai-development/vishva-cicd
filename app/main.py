@@ -17,16 +17,17 @@ from .tts import TextToSpeech
 from .session import UserSessionManager
 from .chat import ChatManager
 from .speech import SpeechRecognition
-from .lip_sync import generate_lip_sync_json
-from .socket import SocketHandler  # Import the new socket handler
+from .socket import SocketHandler 
 from inai_project.app.history.history_manager import HistoryManager
 from inai_project.app.history import history_routes
 from inai_project.app.signup import models as signup_models
 from inai_project.database import engine
+
 signup_models.Base.metadata.create_all(bind=engine)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("MainApp")
-# Replace these with your real AWS & DB settings
+
+
 DB_URL = "your_postgres_url"
 BUCKET_NAME = "your-s3-bucket"
 AWS_ACCESS_KEY = "your-access-key"
@@ -47,7 +48,7 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await app.state.history_manager.close()
-# app.include_router(history_routes.router, prefix="/history")
+
 load_dotenv()
 class ToggleRequest(BaseModel):
     password: str
@@ -72,7 +73,6 @@ class INAIApplication:
             allow_headers=["*"],
         )
         self.asgi_app = socketio.ASGIApp(self.sio, self.app, socketio_path="/socket.io")
-        # Initialize SocketHandler
         self.socket_handler = SocketHandler(
             sio=self.sio,
             session_manager=self.session_manager,
@@ -179,7 +179,6 @@ class INAIApplication:
             
             return self.templates.TemplateResponse("monitor.html", {
                 "request": request,
-                "current_index": data["current_index"],
                 "user_sessions": data["user_sessions"],
                 "key_usage": data["key_usage"]
             })
@@ -221,11 +220,3 @@ class INAIApplication:
             data = await request.json()
             user_id = data.get("user_id")
             return release_key_for_user(user_id)
-        
-
-    # def run(self, host="0.0.0.0", port=4210):
-    def run(self, host="0.0.0.0", port=8000):
-        import uvicorn
-        self.logger.info(f"🚀 Starting INAI on http://{host}:{port}")
-        uvicorn.run(self.asgi_app, host=host, port=port, reload=True)
-        
