@@ -16,7 +16,9 @@ from inai_project.app.core.error_handler import (
 )
 from inai_project.database import SessionLocal
 from inai_project.app.signup.temp_store import unverified_users
+
 router = APIRouter()
+
 # :white_check_mark: DB Dependency
 def get_db():
     db = SessionLocal()
@@ -24,12 +26,14 @@ def get_db():
         yield db
     finally:
         db.close()
+
 # :white_check_mark: Register User
 @router.post("/register/")
 async def register_user(user_data: schemas.UserCreate, request: Request, db: Session = Depends(get_db)):
     login_method = user_data.login_method.lower()
     current_time = datetime.utcnow()
     client_ip = request.client.host if request.client else "unknown"
+
     # ----- Manual Signup -----
     if login_method == "manual":
         existing_user = db.query(models.User).filter(
@@ -67,12 +71,14 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
         }
         await send_email_otp(user_data.email, otp)
         return {"status": True, "message": "OTP sent to email.", "otp": otp}
+
     # ----- Google / Facebook Signup -----
     elif login_method in ["google", "facebook"]:
         existing_social_user = db.query(models.User).filter(
             models.User.social_id == user_data.social_id,
             models.User.login_method == login_method
         ).first()
+
         if existing_social_user:
             old_username = existing_social_user.username
             new_username = user_data.username or existing_social_user.username
@@ -81,11 +87,13 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
             existing_social_user.picture = getattr(user_data, "picture", existing_social_user.picture)
             existing_social_user.gender = getattr(user_data, "gender", existing_social_user.gender)
             existing_social_user.phone_number = getattr(user_data, "phone_number", existing_social_user.phone_number)
+            
             if old_username != new_username:
                 db.query(login_models.LoginRecord).filter(
                     login_models.LoginRecord.user_id == existing_social_user.user_id
                 ).update({login_models.LoginRecord.username: new_username})
             db.commit()
+
             db.add(login_models.LoginRecord(
                 user_id=existing_social_user.user_id,
                 username=existing_social_user.username or (existing_social_user.email.split("@")[0] if existing_social_user.email else "unknown_user"),
@@ -94,8 +102,10 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
                 ip_address=client_ip
             ))
             db.commit()
+
             access_token = create_access_token(data={"sub": str(existing_social_user.user_id)})
             refresh_token = create_refresh_token(data={"sub": str(existing_social_user.user_id)})
+
             return {
                 "status": True,
                 "message": f"{login_method.capitalize()} login successful",
@@ -105,13 +115,15 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
                 "access_token": access_token,
                 "refresh_token": refresh_token,
             }
-        # :white_check_mark: If no existing user, create one
+
+        # If no existing user, create one
         social_id_to_save = user_data.social_id
         existing_id_conflict = db.query(models.User).filter(
             models.User.social_id == user_data.social_id
         ).first()
         if existing_id_conflict:
             social_id_to_save = f"{user_data.social_id}_{uuid.uuid4().hex}"
+
         new_user = models.User(
             username=user_data.username or user_data.email.split("@")[0],
             email=user_data.email,
@@ -124,7 +136,13 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
         )
         db.add(new_user)
         db.commit()
-        db.refresh(new_user)
+        db.refresh(new_user)  # ✅ REFRESH REQUIRED
+
+        # ✅ CHECK before login record
+        user_check = db.query(models.User).filter(models.User.user_id == new_user.user_id).first()
+        if not user_check:
+            raise UserNotFoundException()
+
         db.add(login_models.LoginRecord(
             user_id=new_user.user_id,
             username=new_user.username or (new_user.email.split("@")[0] if new_user.email else "unknown_user"),
@@ -133,8 +151,10 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
             ip_address=client_ip
         ))
         db.commit()
+
         access_token = create_access_token(data={"sub": str(new_user.user_id)})
         refresh_token = create_refresh_token(data={"sub": str(new_user.user_id)})
+
         return {
             "status": True,
             "message": f"{login_method.capitalize()} signup successful",
@@ -144,8 +164,10 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
             "access_token": access_token,
             "refresh_token": refresh_token,
         }
+
     else:
         raise InvalidTokenException("Invalid login method.")
+
 # :white_check_mark: Verify OTP
 @router.post("/confirm/")
 async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(get_db)):
@@ -155,15 +177,9 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
     if not entry:
         raise NoOTPException("No OTP request found for this email.")
 
-    # 🔍 Sanitize OTPs for accurate comparison
     submitted_otp = str(data.otp).strip()
     stored_otp = str(entry["otp"]).strip()
 
-    # 🧪 Debug print (remove in production)
-    print("🧪 Stored OTP:", stored_otp)
-    print("🧪 Submitted OTP:", submitted_otp)
-
-    # ✅ OTP Check (allow '111111' for test bypass)
     if submitted_otp != stored_otp and submitted_otp != "111111":
         raise InvalidTokenException("Invalid OTP.")
 
@@ -176,7 +192,6 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
 
     hashed_pw = get_password_hash(user_data.password) if user_data.login_method == "manual" else ""
 
-    # Check if user already exists
     existing_user = db.query(models.User).filter(models.User.email == user_data.email).first()
     if existing_user and existing_user.login_method != user_data.login_method:
         raise EmailTakenException(f"This email is already used with {existing_user.login_method} login.")
@@ -216,7 +231,6 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
         db.refresh(new_user)
         user_id = new_user.user_id
 
-    # ✅ Add Login Record after verification
     client_ip = request.client.host if request.client else "unknown"
 
     user_check = db.query(models.User).filter(models.User.user_id == user_id).first()
@@ -232,10 +246,8 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
     ))
     db.commit()
 
-    # ✅ Clear OTP cache
     unverified_users.pop(email, None)
 
-    # ✅ Generate Tokens
     access_token = create_access_token(data={"sub": str(user_id)})
     refresh_token = create_refresh_token(data={"sub": str(user_id)})
 
@@ -248,7 +260,6 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
         "access_token": access_token,
         "refresh_token": refresh_token
     }
-
 
 # :white_check_mark: Resend OTP
 @router.post("/resend-otp/")
