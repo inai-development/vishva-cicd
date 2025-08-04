@@ -1,22 +1,26 @@
 # app/gender/routes.py
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 
-from inai_project.app.gender import models, schemas
+from inai_project.app.gender import schemas
 from inai_project.database import SessionLocal
 from inai_project.app.core.security import SECRET_KEY, ALGORITHM
-from inai_project.app.core.error_handler import InvalidGenderException
 from inai_project.app.signup.models import User
-from inai_project.app.core.error_handler import InvalidTokenException
-
+from inai_project.app.logout.routes import is_token_blacklisted
+from inai_project.app.core.error_handler import (
+    InvalidGenderException,
+    InvalidOrExpiredTokenException,
+    UserNotFoundException
+)
 
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/signup/login/")
 
+# ✅ DB Dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -24,17 +28,21 @@ def get_db():
     finally:
         db.close()
 
+# ✅ Current User ID from Token
 def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:
+    if is_token_blacklisted(token):
+        raise InvalidOrExpiredTokenException("Token has been revoked. Please login again.")
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if not user_id:
-            raise InvalidTokenException()
+            raise InvalidOrExpiredTokenException()
         return int(user_id)
     except JWTError:
-        raise InvalidTokenException()
+        raise InvalidOrExpiredTokenException()
 
-
+# ✅ Choose Gender API
 @router.post("/choose/", summary="Choose gender (male/female/other)")
 def choose_gender(
     gender: schemas.GenderChoice,
@@ -44,28 +52,17 @@ def choose_gender(
     if gender.gender not in ["male", "female", "other"]:
         raise InvalidGenderException()
 
-    # Check if user exists
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise UserNotFoundException()
 
-    # Check if gender record exists
-    record = db.query(models.Gender).filter(models.Gender.user_id == user_id).first()
-
-    if record:
-        record.gender = gender.gender
-    else:
-        record = models.Gender(
-            user_id=user_id,
-            gender=gender.gender
-        )
-        db.add(record)
-
+    user.gender = gender.gender
     db.commit()
 
     return {
-        "message": "Gender updated",
-        "user_id": user_id,
+        "status": True,
+        "message": "Gender updated successfully",
+        "user_id": user.user_id,
         "username": user.username,
-        "gender": record.gender
+        "gender": user.gender
     }

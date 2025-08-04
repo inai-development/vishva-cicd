@@ -14,7 +14,7 @@ passlib[bcrypt]==1.7.4
 email-validator==2.2.0
 python-jose[cryptography]==3.5.0
 bcrypt==3.2.2
-psycopg2-binary==2.9.104
+psycopg2-binary==2.9.10
 asyncpg==0.30.0
 boto3==1.39.9
 numpy==2.2.6

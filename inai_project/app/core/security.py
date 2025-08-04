@@ -1,43 +1,43 @@
 # app/core/security.py
+
 from datetime import datetime, timedelta
 from jose import jwt
 import os
 from dotenv import load_dotenv
 from passlib.context import CryptContext
-from pathlib import Path
 
-# ✅ Load .env from the project root (3 levels up from this file)
-BASE_DIR = Path(__file__).resolve().parents[2]
-env_path = BASE_DIR / ".env"
-load_dotenv(dotenv_path=env_path)
+# Load environment variables from .env
+load_dotenv()
 
-# ✅ DEBUG: Print to confirm .env is found
-print("ENV FILE FOUND:", env_path, env_path.exists())
-
-SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-print("SECRET_KEY LOADED:", repr(SECRET_KEY))  # Remove in production
-
-# ✅ Config
+# Constants
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-default-secret-key")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 365 * 30  # 30 years
+ACCESS_TOKEN_EXPIRE_MINUTES = 15768000
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
+# Password hashing config
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# Access token generator
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (
-        expires_delta if expires_delta else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-
-    if not SECRET_KEY or not isinstance(SECRET_KEY, str) or SECRET_KEY.strip() == "":
-        raise Exception("SECRET_KEY not loaded correctly from .env file")
-
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+# ✅ Refresh token generator
+def create_refresh_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# Password verification
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
+# Password hasher
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)

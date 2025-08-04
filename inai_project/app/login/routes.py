@@ -1,29 +1,31 @@
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from inai_project.app.signup import models as signup_models
+from datetime import datetime, timedelta
+import random, uuid
+
 from inai_project.app.signup.models import User
 from inai_project.database import SessionLocal
-from inai_project.app.core.security import create_access_token, verify_password
+from inai_project.app.core.security import create_access_token, create_refresh_token, verify_password
 from . import schemas
 from inai_project.app.login import models as login_models
 from inai_project.app.core.email_utils import send_email_otp
-from datetime import datetime, timedelta
-import random
-from inai_project.app.core.oauth_utils import get_email_from_google_token, get_email_from_facebook_token
 from inai_project.app.core.error_handler import (
     InvalidCredentialsException,
-    EmailNotVerifiedException,
+    UserNotFoundException,
+    OTPExpiredException,
+    NoOTPException,
+    InvalidTokenException,
+    PasswordMismatchException
 )
 from inai_project.app.login.schemas import LoginRequest
-from pydantic import BaseModel, EmailStr
-
+from inai_project.app.signup.temp_store import otp_store
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-# ✅ Dependency to get DB session
+# ✅ DB session dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -32,121 +34,148 @@ def get_db():
         db.close()
 
 
-# ✅ Login route
+# ✅ Login API (Manual + Google + Facebook with auto-signup & always update DB)
 @router.post("/login/")
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    login_method = None
+    login_method = payload.login_method.lower()
     user = None
 
-    if payload.password and payload.email:
-        login_method = "manual"
+    # ----- Manual Login -----
+    if login_method == "manual":
         user = db.query(User).filter(User.email == payload.email).first()
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise UserNotFoundException("User not found. Please register first before logging in.")
         if not verify_password(payload.password, user.hashed_password):
-            raise HTTPException(status_code=400, detail="Incorrect password")
+            raise InvalidCredentialsException("Invalid email or password.")
 
-    elif payload.google_id:
-        login_method = "google"
-        email = get_email_from_google_token(payload.google_id)
-        if not email:
-            raise HTTPException(status_code=400, detail="Invalid Google token")
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    # ----- Google / Facebook Login -----
+    elif login_method in ["google", "facebook"]:
+        if payload.email:
+            user = db.query(User).filter(User.email == payload.email).first()
+        if not user and payload.social_id:
+            user = db.query(User).filter(User.social_id == payload.social_id).first()
 
-    elif payload.facebook_id:
-        login_method = "facebook"
-        email = get_email_from_facebook_token(payload.facebook_id)
-        if not email:
-            raise HTTPException(status_code=400, detail="Invalid Facebook token")
-        user = db.query(User).filter(User.email == email).first()
+        # Update existing user info
+        if user:
+            user.username = payload.username or user.username
+            user.email = payload.email or user.email
+            if getattr(payload, "picture", None):
+                user.picture = payload.picture
+            if getattr(payload, "gender", None):
+                user.gender = payload.gender
+            if getattr(payload, "phone_number", None):
+                user.phone_number = payload.phone_number
+            db.commit()
+            db.refresh(user)
+
+        # Create new user if not exists
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            social_id_to_save = payload.social_id
+            if db.query(User).filter(User.social_id == payload.social_id).first():
+                social_id_to_save = f"{payload.social_id}_{uuid.uuid4().hex}"
+
+            user = User(
+                username=payload.username or (payload.email.split("@")[0] if payload.email else f"{login_method}_user"),
+                email=payload.email,
+                hashed_password="",  # No password for social login
+                is_verified=True,
+                login_method=login_method,
+                social_id=social_id_to_save,
+                picture=getattr(payload, "picture", None),
+                gender=getattr(payload, "gender", None),
+                phone_number=getattr(payload, "phone_number", None),
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
     else:
-        raise HTTPException(status_code=400, detail="Provide valid login credentials")
+        raise InvalidCredentialsException("Invalid login method.")
 
-    # ✅ Save login record
+    # ✅ Generate tokens
+    access_token = create_access_token({"sub": str(user.user_id), "username": user.username})
+    refresh_token = create_refresh_token({"sub": str(user.user_id)})
+    db.add(user)       # INSERT into DB only now!
+    db.commit()
+    db.refresh(user)
+
+    # Log login
     client_ip = request.client.host
-    login_record = login_models.LoginRecord(
-        user_id=user.id,
+    db.add(login_models.LoginRecord(
+        user_id=user.user_id,
+        username=user.username,
         email=user.email,
         login_method=login_method,
         ip_address=client_ip
-    )
-    db.add(login_record)
+    ))
     db.commit()
 
-    # ✅ Create JWT token
-    access_token = create_access_token(
-        data={"sub": str(user.id), "username": user.username}
-    )
-
     return {
-        "message": "Login successful",
-        "user_id": user.id,
+        "status": True,
+        "message": f"{login_method.capitalize()} login successful",
+        "user_id": user.user_id,
         "username": user.username,
         "email": user.email,
-        "login_method": login_method,
-        "is_verified": user.is_verified,
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer"
     }
 
 
-# ✅ Password Reset Request
-class ResetPasswordRequest(BaseModel):
-    email: EmailStr
-    new_password: str
-    confirm_password: str
-
-
+# ✅ Forgot Password - Send OTP
 @router.post("/forgot-password/email/", summary="Step 1: Send OTP to email")
 async def send_otp_email(data: schemas.ForgotPasswordEmailRequest, db: Session = Depends(get_db)):
-    user = db.query(signup_models.User).filter(signup_models.User.email == data.email).first()
+    user = db.query(User).filter(User.email == data.email).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise UserNotFoundException("User not found.")
+
+    record = otp_store.get(data.email)
+    if record:
+        time_diff = datetime.utcnow() - record["created_at"]
+        seconds_remaining = int((timedelta(minutes=1) - time_diff).total_seconds())
+        if seconds_remaining > 0:
+            raise OTPExpiredException(f"OTP already sent. Please wait {seconds_remaining} seconds to resend.")
 
     otp = str(random.randint(100000, 999999))
-    user.otp = otp
-    user.otp_created_at = datetime.utcnow()
-    db.commit()
-
+    otp_store[data.email] = {"otp": otp, "created_at": datetime.utcnow()}
     await send_email_otp(user.email, otp, purpose="password_reset")
-    return {"message": "OTP sent to your email."}
+
+    return {"status": True, "message": "OTP sent to your email."}
 
 
+# ✅ Forgot Password - Verify OTP
 @router.post("/forgot-password/verify-otp/", summary="Step 2: Verify OTP")
 def verify_otp(data: schemas.OTPVerifyRequest, db: Session = Depends(get_db)):
-    user = db.query(signup_models.User).filter(signup_models.User.email == data.email).first()
-    if not user or not user.otp or not user.otp_created_at:
-        raise HTTPException(status_code=400, detail="Invalid request.")
+    record = otp_store.get(data.email)
+    if not record:
+        raise NoOTPException("No OTP request found.")
 
-    # Check OTP validity
-    if datetime.utcnow() - user.otp_created_at > timedelta(minutes=10):
-        raise HTTPException(status_code=400, detail="OTP expired.")
+    if datetime.utcnow() - record["created_at"] > timedelta(minutes=5):
+        raise OTPExpiredException("OTP expired.")
 
-    if user.otp != data.otp:
-        raise HTTPException(status_code=400, detail="Invalid OTP.")
+    if record["otp"] != data.otp:
+        raise InvalidTokenException("Invalid OTP.")
 
-    user.otp = None  # clear OTP for security
-    db.commit()
-
-    return {"message": "OTP verified successfully."}
+    otp_store[data.email]["verified"] = True
+    return {"status": True, "message": "OTP verified successfully."}
 
 
-@router.post("/forgot-password/reset/", summary="Step 3: Reset password")
+# ✅ Forgot Password - Reset Password
+@router.post("/forgot-password/reset/")
 def reset_password(data: schemas.PasswordResetRequest, db: Session = Depends(get_db)):
     if data.new_password != data.confirm_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match.")
+        raise PasswordMismatchException("Passwords do not match.")
 
-    user = db.query(signup_models.User).filter(signup_models.User.email == data.email).first()
+    record = otp_store.get(data.email)
+    if not record or not record.get("verified"):
+        raise NoOTPException("OTP not verified.")
+
+    user = db.query(User).filter(User.email == data.email).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise UserNotFoundException("User not found.")
 
-    hashed_pw = pwd_context.hash(data.new_password)
-    user.hashed_password = hashed_pw
+    user.hashed_password = pwd_context.hash(data.new_password)
     db.commit()
 
-    return {"message": "Password reset successfully."}
+    otp_store.pop(data.email, None)
+    return {"status": True, "message": "Password reset successfully."}

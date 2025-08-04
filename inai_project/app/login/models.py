@@ -1,13 +1,14 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
-from inai_project.database import Base
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.sql import func
+from inai_project.database import Base
 
 class LoginRecord(Base):
     __tablename__ = "login_records"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # ✅ સુધારેલું
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    username = Column(String, nullable=False) 
     email = Column(String, nullable=False)
-    login_method = Column(String, nullable=True) 
-    ip_address = Column(String, nullable=True)
-    login_time = Column(DateTime(timezone=True), server_default=func.now())
+    login_method = Column(String, nullable=False)
+    ip_address = Column(String)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())

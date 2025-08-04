@@ -11,5 +11,5 @@ class GenderResponse(BaseModel):
     gender: str
     username: str 
 
-    class Config:
+    class Config:   
         from_attributes = True

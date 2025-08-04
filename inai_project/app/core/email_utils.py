@@ -1,4 +1,4 @@
-# app/utils/email_utils.py
+# app/core/email_utils.py
 import os
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import EmailStr
@@ -34,28 +34,84 @@ async def send_email_otp(email: EmailStr, otp: str, purpose: str = "signup"):
         greeting = "Here is your verification code."
 
     message_body = f"""
-Hi there 👋,
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                background-color: #f7f9fb;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                color: #333;
+            }}
+            .container {{
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                padding: 30px;
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                text-align: center; /* Center all text */
+            }}
+            .brand {{
+                color: #4a90e2;
+                font-weight: 600;
+                font-size: 28px;
+            }}
+            .otp {{
+                font-size: 24px;
+                font-weight: bold;
+                color: #4a90e2;
+                background-color: #eef4ff;
+                padding: 10px 20px;
+                display: inline-block;
+                border-radius: 8px;
+                margin: 20px 0;
+            }}
+            .footer {{
+                margin-top: 30px;
+                font-size: 13px;
+                color: #888;
+            }}
+            @media only screen and (max-width: 600px) {{
+                .container {{
+                    padding: 20px;
+                    border-radius: 0;
+                    box-shadow: none;
+                }}
+                .otp {{
+                    font-size: 20px;
+                    padding: 8px 16px;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="brand">INAI</div>
+            <p>{greeting}</p>
+            <p>To continue, please use the following One-Time Password (OTP):</p>
+            <div class="otp">{otp}</div>
+            <p>This code is valid for the next <strong>60 seconds</strong>.<br> Please do not share this OTP with anyone.</p>
+            <p>If you did not request this, you can safely ignore this message.</p>
+            <div class="footer">
+                — Team INAI<br/>
+                📩 {os.getenv("MAIL_FROM")}
+            </div>
+        </div>
+    </body>
+    </html>
+    """
 
-{greeting}
-
-To continue, please use the following One-Time Password (OTP):
-
-🔐 Your OTP is: {otp}
-
-This code is valid for the next 10 minutes. Please do not share this OTP with anyone.
-
-If you did not request this, you can ignore this message.
-
-Best regards,  
-Team INAI  
-📩 {os.getenv("MAIL_FROM")}
-"""
 
     message = MessageSchema(
         subject=subject,
         recipients=[email],
         body=message_body,
-        subtype=MessageType.plain
+        subtype=MessageType.html
     )
 
     fm = FastMail(conf)

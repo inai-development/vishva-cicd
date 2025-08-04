@@ -1,18 +1,40 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from inai_project.database import Base
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, UniqueConstraint, JSON
+from sqlalchemy.sql import func
+from inai_project.database import Base  # :white_check_mark: central Base
 
+# :white_check_mark: User Table
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)  # Primary ID field
-    google_id = Column(String, unique=True, nullable=True)                 # Google OAuth ID
-    facebook_id = Column(String, unique=True, nullable=True)               # Facebook OAuth ID
-    username = Column(String, nullable=False)                              # Username
-    email = Column(String, unique=True, index=True, nullable=False)        # Email (Unique)
-    hashed_password = Column(String, nullable=True)                        # Password hash
-    otp = Column(String, nullable=True)                                    # OTP for email verification
-    is_verified = Column(Boolean, default=False)                           # Email verified or not
-    login_method = Column(String, nullable=True)                           # Login method (manual, google, facebook)
-    new_email = Column(String, unique=True, nullable=True)                 # New email (for change requests)
-    email_change_otp = Column(String, nullable=True)                       # OTP for changing email
-    otp_created_at = Column(DateTime, nullable=True)                       # OTP creation time
+    user_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    username = Column(String, index=True, nullable=False)
+    email = Column(String, index=True, nullable=False)
+    hashed_password = Column(String, nullable=True)
+    is_verified = Column(Boolean, default=False)
+    login_method = Column(String, default="manual")  # manual, google, etc.
+
+    # Keep only one definition
+    social_id = Column(String, unique=True, nullable=True)
+
+    # Optional profile fields
+    picture = Column(String, nullable=True)
+    gender = Column(String, nullable=True)
+    phone_number = Column(String, unique=True, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('email', 'login_method', name='uq_email_login_method'),
+    )
+
+
+# :white_check_mark: OTP Table for Email Verification
+class EmailOTP(Base):
+    __tablename__ = "email_otp"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, nullable=False)
+    otp = Column(String, nullable=False)
+    user_data = Column(JSON, nullable=True)  # Store full signup info for later use
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
