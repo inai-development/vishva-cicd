@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import List, Dict, Optional
 import logging
 import ssl
+import re
 
 logger = logging.getLogger("HistoryManager")
 logging.basicConfig(level=logging.INFO)
@@ -77,6 +78,46 @@ class HistoryManager:
             await self.pool.close()
             self.logger.info("Database connection closed")
 
+    def generate_smart_title(self, content: str, role: str = "assistant") -> str:
+        """Generate a smart title from assistant's response instead of user input"""
+        if not content or len(content.strip()) < 5:
+            return "New Conversation"
+        
+        # Clean the content
+        cleaned = re.sub(r'[^\w\s]', '', content.strip())
+        
+        # If it's a short response like greetings, use default
+        short_responses = ['hi', 'hello', 'hey', 'namaste', 'good morning', 'good evening', 'good afternoon']
+        if cleaned.lower() in short_responses:
+            return "New Conversation"
+        
+        # Extract meaningful words (skip common words)
+        words = cleaned.split()
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'about', 'how', 'what', 'when', 'where', 'why', 'who'}
+        
+        meaningful_words = [word for word in words if word.lower() not in stop_words and len(word) > 2]
+        
+        if meaningful_words:
+            # Take first 3-4 meaningful words
+            title_words = meaningful_words[:4]
+            title = ' '.join(title_words)
+            
+            # Capitalize first letter of each word
+            title = ' '.join(word.capitalize() for word in title.split())
+            
+            # Limit length
+            if len(title) > 40:
+                title = title[:37] + "..."
+                
+            return title
+        
+        # Fallback: use first few words
+        first_words = ' '.join(words[:4])
+        if len(first_words) > 40:
+            first_words = first_words[:37] + "..."
+        
+        return first_words.title() if first_words else "New Conversation"
+
     async def create_new_conversation(self, user_id: str, mode: str, title: str = "New Conversation") -> str:
         conversation_id = str(uuid.uuid4())
         try:
@@ -116,10 +157,44 @@ class HistoryManager:
                 await conn.execute("""
                     UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1
                 """, conversation_id)
+            
+            # Auto-update title if this is the first assistant response
+            if role == "assistant":
+                await self.auto_update_title_from_response(conversation_id, content)
+            
             self.logger.info(f"💾 Saved message to conversation {conversation_id}")
         except Exception as e:
             self.logger.error(f"❌ Failed to save message: {e}")
             raise
+
+    async def auto_update_title_from_response(self, conversation_id: str, response_content: str):
+        """Auto-update conversation title based on first meaningful assistant response"""
+        try:
+            async with self.pool.acquire() as conn:
+                # Check if this conversation still has default title and this is first/second assistant message
+                current_title = await conn.fetchval("""
+                    SELECT title FROM conversations WHERE id = $1
+                """, conversation_id)
+                
+                assistant_message_count = await conn.fetchval("""
+                    SELECT COUNT(*) FROM messages 
+                    WHERE conversation_id = $1 AND role = 'assistant'
+                """, conversation_id)
+                
+                # Only update if current title is default and this is first assistant response
+                if current_title == "New Conversation" and assistant_message_count <= 1:
+                    new_title = self.generate_smart_title(response_content, "assistant")
+                    
+                    if new_title != "New Conversation" and new_title != current_title:
+                        await conn.execute("""
+                            UPDATE conversations 
+                            SET title = $1, updated_at = CURRENT_TIMESTAMP 
+                            WHERE id = $2
+                        """, new_title, conversation_id)
+                        self.logger.info(f"🏷️ Auto-updated title: {conversation_id} -> {new_title}")
+                        
+        except Exception as e:
+            self.logger.error(f"❌ Failed to auto-update title: {e}")
 
     async def save_message_with_audio_bytes(self, conversation_id: str, role: str, content: str, audio_bytes: bytes = None):
         audio_url = None
@@ -160,11 +235,20 @@ class HistoryManager:
             self.logger.error(f"❌ Failed to get messages: {e}")
             return []
 
-    # Updated method: Get conversations by mode with proper grouping
+    # FIXED: Updated method to show first USER message instead of assistant message for preview
     async def get_user_conversations_by_mode(self, user_id: str, mode: str) -> List[Dict]:
         try:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch("""
+                    WITH FirstUserMessage AS (
+                        SELECT DISTINCT ON (conversation_id)
+                            conversation_id,
+                            content as first_message,
+                            created_at
+                        FROM messages
+                        WHERE role = 'user'
+                        ORDER BY conversation_id, created_at ASC
+                    )
                     SELECT 
                         c.id, 
                         c.title, 
@@ -172,36 +256,34 @@ class HistoryManager:
                         c.created_at, 
                         c.updated_at,
                         c.is_archived,
-                        m.content as last_message,
-                        COUNT(msg.id) as message_count
+                        COALESCE(f.first_message, 'New Conversation') as first_message,
+                        COUNT(m.id) as message_count
                     FROM conversations c
-                    LEFT JOIN LATERAL (
-                        SELECT content 
-                        FROM messages 
-                        WHERE conversation_id = c.id 
-                        ORDER BY created_at DESC 
-                        LIMIT 1
-                    ) m ON true
-                    LEFT JOIN messages msg ON msg.conversation_id = c.id
-                    WHERE c.user_id = $1 AND c.mode = $2 AND c.is_archived = false
-                    GROUP BY c.id, c.title, c.mode, c.created_at, c.updated_at, c.is_archived, m.content
+                    LEFT JOIN FirstUserMessage f ON c.id = f.conversation_id
+                    LEFT JOIN messages m ON c.id = m.conversation_id
+                    WHERE c.user_id = $1 
+                    AND c.mode = $2 
+                    AND c.is_archived = false
+                    GROUP BY 
+                        c.id, c.title, c.mode, c.created_at, 
+                        c.updated_at, c.is_archived, f.first_message
                     ORDER BY c.updated_at DESC
                 """, user_id, mode)
             
             conversations = []
             for row in rows:
                 conv = dict(row)
-                if conv['last_message']:
-                    conv['preview'] = conv['last_message'][:50] + "..." if len(conv['last_message']) > 50 else conv['last_message']
-                else:
-                    conv['preview'] = "No messages yet"
+                # Set preview from first message
+                first_msg = conv.get('first_message', '')
+                conv['preview'] = first_msg[:50] + "..." if len(first_msg) > 50 else first_msg
                 conversations.append(conv)
             
-            self.logger.info(f"📋 Found {len(conversations)} conversations for user {user_id} in mode {mode}")
+            self.logger.info(f"📋 Found {len(conversations)} conversations for {user_id}")
             return conversations
+            
         except Exception as e:
-            self.logger.error(f"❌ Failed to get mode-wise conversations for {user_id}: {e}")
-            return []
+            self.logger.error(f"❌ Failed to get conversations: {e}")
+        return []
 
     # New method: Get conversation modes summary
     async def get_user_modes_summary(self, user_id: str) -> List[Dict]:
@@ -237,7 +319,7 @@ class HistoryManager:
             self.logger.error(f"❌ Failed to get modes summary for {user_id}: {e}")
             return []
 
-    # Updated method: Get all conversations with better structure
+    # FIXED: Updated method to show first USER message as preview
     async def get_user_conversations_with_preview(self, user_id: str) -> List[Dict]:
         try:
             async with self.pool.acquire() as conn:
@@ -249,27 +331,27 @@ class HistoryManager:
                         c.created_at, 
                         c.updated_at,
                         c.is_archived,
-                        m.content as last_message,
+                        (
+                            SELECT content 
+                            FROM messages 
+                            WHERE conversation_id = c.id AND role = 'user'
+                            ORDER BY created_at ASC 
+                            LIMIT 1
+                        ) as first_user_message,
                         COUNT(msg.id) as message_count
                     FROM conversations c
-                    LEFT JOIN LATERAL (
-                        SELECT content 
-                        FROM messages 
-                        WHERE conversation_id = c.id 
-                        ORDER BY created_at DESC 
-                        LIMIT 1
-                    ) m ON true
                     LEFT JOIN messages msg ON msg.conversation_id = c.id
                     WHERE c.user_id = $1 AND c.is_archived = false
-                    GROUP BY c.id, c.title, c.mode, c.created_at, c.updated_at, c.is_archived, m.content
+                    GROUP BY c.id, c.title, c.mode, c.created_at, c.updated_at, c.is_archived
                     ORDER BY c.updated_at DESC
                 """, user_id)
             
             conversations = []
             for row in rows:
                 conv = dict(row)
-                if conv['last_message']:
-                    conv['preview'] = conv['last_message'][:50] + "..." if len(conv['last_message']) > 50 else conv['last_message']
+                # Show first user message as preview
+                if conv['first_user_message']:
+                    conv['preview'] = conv['first_user_message'][:50] + "..." if len(conv['first_user_message']) > 50 else conv['first_user_message']
                 else:
                     conv['preview'] = "No messages yet"
                 conversations.append(conv)

@@ -16,7 +16,9 @@ from inai_project.app.core.error_handler import (
 )
 from inai_project.database import SessionLocal
 from inai_project.app.signup.temp_store import unverified_users
+
 router = APIRouter()
+
 # :white_check_mark: DB Dependency
 def get_db():
     db = SessionLocal()
@@ -81,6 +83,7 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
             existing_social_user.picture = getattr(user_data, "picture", existing_social_user.picture)
             existing_social_user.gender = getattr(user_data, "gender", existing_social_user.gender)
             existing_social_user.phone_number = getattr(user_data, "phone_number", existing_social_user.phone_number)
+            
             if old_username != new_username:
                 db.query(login_models.LoginRecord).filter(
                     login_models.LoginRecord.user_id == existing_social_user.user_id
@@ -94,8 +97,10 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
                 ip_address=client_ip
             ))
             db.commit()
+
             access_token = create_access_token(data={"sub": str(existing_social_user.user_id)})
             refresh_token = create_refresh_token(data={"sub": str(existing_social_user.user_id)})
+
             return {
                 "status": True,
                 "message": f"{login_method.capitalize()} login successful",
@@ -105,7 +110,8 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
                 "access_token": access_token,
                 "refresh_token": refresh_token,
             }
-        # :white_check_mark: If no existing user, create one
+
+        # If no existing user, create one
         social_id_to_save = user_data.social_id
         existing_id_conflict = db.query(models.User).filter(
             models.User.social_id == user_data.social_id
@@ -124,7 +130,13 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
         )
         db.add(new_user)
         db.commit()
-        db.refresh(new_user)
+        db.refresh(new_user)  # ✅ REFRESH REQUIRED
+
+        # ✅ CHECK before login record
+        user_check = db.query(models.User).filter(models.User.user_id == new_user.user_id).first()
+        if not user_check:
+            raise UserNotFoundException()
+
         db.add(login_models.LoginRecord(
             user_id=new_user.user_id,
             username=new_user.username or (new_user.email.split("@")[0] if new_user.email else "unknown_user"),
@@ -133,8 +145,10 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
             ip_address=client_ip
         ))
         db.commit()
+
         access_token = create_access_token(data={"sub": str(new_user.user_id)})
         refresh_token = create_refresh_token(data={"sub": str(new_user.user_id)})
+
         return {
             "status": True,
             "message": f"{login_method.capitalize()} signup successful",
@@ -144,8 +158,10 @@ async def register_user(user_data: schemas.UserCreate, request: Request, db: Ses
             "access_token": access_token,
             "refresh_token": refresh_token,
         }
+
     else:
         raise InvalidTokenException("Invalid login method.")
+
 # :white_check_mark: Verify OTP
 @router.post("/confirm/")
 async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(get_db)):
@@ -155,15 +171,9 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
     if not entry:
         raise NoOTPException("No OTP request found for this email.")
 
-    # 🔍 Sanitize OTPs for accurate comparison
     submitted_otp = str(data.otp).strip()
     stored_otp = str(entry["otp"]).strip()
 
-    # 🧪 Debug print (remove in production)
-    print("🧪 Stored OTP:", stored_otp)
-    print("🧪 Submitted OTP:", submitted_otp)
-
-    # ✅ OTP Check (allow '111111' for test bypass)
     if submitted_otp != stored_otp and submitted_otp != "111111":
         raise InvalidTokenException("Invalid OTP.")
 
@@ -176,7 +186,6 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
 
     hashed_pw = get_password_hash(user_data.password) if user_data.login_method == "manual" else ""
 
-    # Check if user already exists
     existing_user = db.query(models.User).filter(models.User.email == user_data.email).first()
     if existing_user and existing_user.login_method != user_data.login_method:
         raise EmailTakenException(f"This email is already used with {existing_user.login_method} login.")
@@ -216,7 +225,6 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
         db.refresh(new_user)
         user_id = new_user.user_id
 
-    # ✅ Add Login Record after verification
     client_ip = request.client.host if request.client else "unknown"
 
     user_check = db.query(models.User).filter(models.User.user_id == user_id).first()
@@ -232,10 +240,8 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
     ))
     db.commit()
 
-    # ✅ Clear OTP cache
     unverified_users.pop(email, None)
 
-    # ✅ Generate Tokens
     access_token = create_access_token(data={"sub": str(user_id)})
     refresh_token = create_refresh_token(data={"sub": str(user_id)})
 
@@ -247,6 +253,27 @@ async def verify_otp(data: ConfirmOTP, request: Request, db: Session = Depends(g
         "email": email,
         "access_token": access_token,
         "refresh_token": refresh_token
+    }
+
+# :white_check_mark: Resend OTP
+@router.post("/resend-otp/")
+async def resend_otp(data: ResendOTPRequest):
+    email = data.email.strip().lower()
+    current_time = datetime.utcnow()
+    user_entry = unverified_users.get(email)
+    if not user_entry:
+        raise NoOTPException("No pending signup found for this email.")
+    if user_entry.get("expires_at") > current_time:
+        remaining = (user_entry["expires_at"] - current_time).seconds
+        raise OTPExpiredException(f"OTP already sent. Please wait {remaining} seconds to resend.")
+    new_otp = str(random.randint(100000, 999999))
+    user_entry["otp"] = new_otp
+    user_entry["expires_at"] = current_time + timedelta(minutes=1)
+    unverified_users[email] = user_entry
+    await send_email_otp(email, new_otp)
+    return {
+        "status": True,
+        "message": "OTP resent successfully. Please check your email."
     }
 
 

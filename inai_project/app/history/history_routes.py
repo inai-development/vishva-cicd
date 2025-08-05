@@ -26,6 +26,10 @@ class ModeSelectionRequest(BaseModel):
     user_id: str
     selected_mode: str
 
+class AutoUpdateTitleRequest(BaseModel):
+    user_id: str
+    conversation_id: str
+
 # ------------------ History Flow Routes ------------------
 
 @router.get("/modes/{user_id}")
@@ -109,6 +113,106 @@ async def set_active_conversation_from_history(request_data: SetActiveConversati
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# ------------------ New Title Management Routes ------------------
+
+@router.post("/conversation/auto-update-title")
+async def auto_update_conversation_title(request_data: AutoUpdateTitleRequest, request: Request):
+    """Auto-update conversation title based on first assistant response"""
+    history_manager: HistoryManager = request.app.state.history_manager
+    
+    try:
+        # Get first assistant response from the conversation
+        async with history_manager.pool.acquire() as conn:
+            # Verify conversation belongs to user
+            conversation = await conn.fetchrow("""
+                SELECT id, title FROM conversations 
+                WHERE id = $1 AND user_id = $2 AND is_archived = false
+            """, request_data.conversation_id, request_data.user_id)
+            
+            if not conversation:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            
+            # Get first assistant response
+            first_assistant_response = await conn.fetchval("""
+                SELECT content FROM messages 
+                WHERE conversation_id = $1 AND role = 'assistant'
+                ORDER BY created_at ASC 
+                LIMIT 1
+            """, request_data.conversation_id)
+            
+            if first_assistant_response:
+                # Generate new title from assistant response
+                new_title = history_manager.generate_smart_title(first_assistant_response, "assistant")
+                
+                # Update the title
+                await history_manager.update_conversation_title(
+                    conversation_id=request_data.conversation_id,
+                    new_title=new_title,
+                    user_id=request_data.user_id
+                )
+                
+                return {
+                    "message": "Title updated successfully from assistant response",
+                    "old_title": conversation['title'],
+                    "new_title": new_title,
+                    "status": "success"
+                }
+            else:
+                raise HTTPException(status_code=400, detail="No assistant response found to generate title")
+                
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/conversation/regenerate-titles")
+async def regenerate_all_conversation_titles(user_id: str, request: Request):
+    """Regenerate titles for all conversations with default titles"""
+    history_manager: HistoryManager = request.app.state.history_manager
+    
+    try:
+        updated_conversations = []
+        
+        async with history_manager.pool.acquire() as conn:
+            # Get all conversations with default titles
+            conversations = await conn.fetch("""
+                SELECT id, title FROM conversations 
+                WHERE user_id = $1 AND title = 'New Conversation' AND is_archived = false
+            """, user_id)
+            
+            for conv in conversations:
+                # Get first assistant response for each conversation
+                first_response = await conn.fetchval("""
+                    SELECT content FROM messages 
+                    WHERE conversation_id = $1 AND role = 'assistant'
+                    ORDER BY created_at ASC 
+                    LIMIT 1
+                """, conv['id'])
+                
+                if first_response:
+                    new_title = history_manager.generate_smart_title(first_response, "assistant")
+                    
+                    if new_title != "New Conversation":
+                        await history_manager.update_conversation_title(
+                            conversation_id=conv['id'],
+                            new_title=new_title,
+                            user_id=user_id
+                        )
+                        updated_conversations.append({
+                            "conversation_id": conv['id'],
+                            "old_title": conv['title'],
+                            "new_title": new_title
+                        })
+        
+        return {
+            "message": f"Updated {len(updated_conversations)} conversation titles",
+            "updated_conversations": updated_conversations,
+            "status": "success"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ------------------ Existing Routes (Updated for better organization) ------------------
 

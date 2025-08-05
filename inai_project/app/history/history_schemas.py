@@ -29,8 +29,9 @@ class ConversationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_archived: bool
-    preview: Optional[str] = None
-    message_count: Optional[int] = 0
+    first_message: str  # Changed from Optional to required
+    preview: str  # This will now use first_message
+    message_count: int = 0
 
 
 class ConversationWithMessages(BaseModel):
@@ -85,3 +86,48 @@ class CreateNewConversationFromHistory(BaseModel):
     user_id: str
     mode: str
     title: str = "New Conversation"
+
+
+# New schemas for title management
+class AutoUpdateTitleRequest(BaseModel):
+    user_id: str
+    conversation_id: str
+
+
+class TitleUpdateResponse(BaseModel):
+    message: str
+    old_title: str
+    new_title: str
+    status: str
+
+
+class BulkTitleUpdateResponse(BaseModel):
+    message: str
+    updated_conversations: List[dict]
+    status: str
+
+
+class TitleRegenerationRequest(BaseModel):
+    user_id: str
+    force_update: bool = False  # If True, updates even non-default titles
+
+
+# Enhanced conversation preview schema
+class ConversationPreview(BaseModel):
+    id: str
+    title: str
+    mode: str
+    created_at: datetime
+    updated_at: datetime
+    preview: str  # First user message for display
+    message_count: int
+    has_audio: bool = False  # If conversation contains audio messages
+    last_activity: str  # Human readable time like "2 hours ago"
+
+
+class EnhancedConversationsListResponse(HistoryFlowResponse):
+    conversations: List[ConversationPreview]
+    mode: str
+    total: int
+    page: Optional[int] = None
+    per_page: Optional[int] = None
