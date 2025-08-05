@@ -1,6 +1,4 @@
-# app/change_password/schemas.py
-
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator, validator
 import re
 
 class PasswordChangeRequest(BaseModel):
@@ -8,8 +6,9 @@ class PasswordChangeRequest(BaseModel):
     new_password: str
     confirm_password: str
 
-    @validator("new_password")
-    def validate_password(cls, v):
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters long.")
         if not re.search(r"[A-Z]", v):
@@ -21,6 +20,7 @@ class PasswordChangeRequest(BaseModel):
         if not re.search(r"[!@#$%^&*()_+=\-{}\[\]:;\"'<>,.?/]", v):
             raise ValueError("Password must contain at least one special character.")
         return v
+
 
     @validator("confirm_password")
     def passwords_match(cls, v, values, **kwargs):

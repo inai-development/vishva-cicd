@@ -1,26 +1,43 @@
-from pydantic import BaseModel, EmailStr, validator, StringConstraints
-from typing import Annotated , Optional, Literal
+from pydantic import BaseModel, EmailStr, validator
+from typing import Optional, Literal
 import re
 
 
 class LoginRequest(BaseModel):
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     password: Optional[str] = None
-    google_id: Optional[str] = None
-    facebook_id: Optional[str] = None
-    login_method: Literal["manual", "google", "facebook"] = "manual"
+    login_method: Literal["manual", "google", "facebook"]
+    social_id: Optional[str] = None
+    username: Optional[str] = None
+
+    @validator("password", always=True)
+    def validate_password_for_manual(cls, value, values):
+        method = values.get("login_method")
+        if method == "manual" and not value:
+            raise ValueError("Password is required for manual login.")
+        return value
+
+    @validator("social_id", always=True)
+    def validate_social_id_for_social_login(cls, value, values):
+        method = values.get("login_method")
+        if method in ["google", "facebook"] and not value:
+            raise ValueError("social_id is required for Google/Facebook login.")
+        return value
+
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    
+
 
 class ForgotPasswordEmailRequest(BaseModel):
     email: EmailStr
 
+
 class OTPVerifyRequest(BaseModel):
     email: EmailStr
-    otp: Annotated[str, StringConstraints(min_length=4, max_length=8)]
+    otp: str
+
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr

@@ -4,8 +4,6 @@ from jose import jwt, JWTError
 from fastapi.security import OAuth2PasswordBearer
 from inai_project.app.core.security import SECRET_KEY, ALGORITHM
 from inai_project.app.core.error_handler import InvalidTokenException
-
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/signup/login/")
 
 def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:

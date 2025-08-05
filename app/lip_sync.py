@@ -9,8 +9,8 @@ from langdetect import detect
 from langdetect.detector_factory import DetectorFactory
 
 
-# os.environ["PATH"] += os.pathsep + r"D:\AA\vishume\ffmpeg\bin"
-# AudioSegment.converter = r"D:\AA\vishume\ffmpeg\bin\ffmpeg.exe"
+# os.environ["PATH"] += os.pathsep + r"D:\INAI_Backend_MD\Models\ffmpeg\bin"
+# AudioSegment.converter = r"D:\INAI_Backend_MD\Models\ffmpeg\bin\ffmpeg.exe"
 
 AudioSegment.converter = "ffmpeg"
 
