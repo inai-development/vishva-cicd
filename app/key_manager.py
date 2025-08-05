@@ -1,9 +1,10 @@
-from dotenv import dotenv_values
+import tiktoken
 from typing import Dict
 from uuid import uuid4
 from threading import Lock
 from datetime import datetime
 from config import Config
+from collections import defaultdict
 
 config = Config()
 
@@ -14,10 +15,18 @@ if not api_keys:
 user_sessions: Dict[str, Dict] = {}
 key_usage_count: Dict[str, int] = {key: 0 for key in api_keys}
 lock = Lock()
+user_token_usage: defaultdict[int] = defaultdict(int)
 
 print(f"🔐 Loaded {len(api_keys)} API keys")
 for i, key in enumerate(api_keys):
     print(f"[{i+1:02d}] {key[:10]}...")
+
+def count_tokens(text: str, model: str = "gpt-4") -> int:
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        encoding = tiktoken.get_encoding("cl100k_base")
+    return len(encoding.encode(text))
 
 def assign_key_to_user(user_id: str, task: str = "Unknown Task") -> Dict:
     with lock:
@@ -75,5 +84,6 @@ def get_monitor_data() -> Dict:
                     "user_id": user_id
                 }
                 for user_id, session in user_sessions.items()
-            }
+            },
+            "token_usage_per_user": dict(user_token_usage),
         }

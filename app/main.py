@@ -180,7 +180,8 @@ class INAIApplication:
             return self.templates.TemplateResponse("monitor.html", {
                 "request": request,
                 "user_sessions": data["user_sessions"],
-                "key_usage": data["key_usage"]
+                "key_usage": data["key_usage"],
+                "token_usage_per_user": data["token_usage_per_user"]
             })
    
         @self.app.post("/toggle")

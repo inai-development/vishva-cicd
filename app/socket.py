@@ -1,7 +1,7 @@
 import asyncio
 import base64
 import random
-from .key_manager import assign_key_to_user, release_key_for_user, update_last_active
+from .key_manager import assign_key_to_user, release_key_for_user, update_last_active , count_tokens , user_token_usage
 from .lip_sync import generate_lip_sync_json
 import os
 
@@ -142,6 +142,20 @@ class SocketHandler:
         async def process_response():
             try:
                 response = await self.chat_manager.chat_with_groq(user_id, mode, query)
+                if isinstance(response, tuple):
+                    response, _ = response
+                elif isinstance(response, dict):
+                    response = response.get("response", "")
+                else:
+                    response = str(response)      
+                question_tokens = count_tokens(query)
+                answer_tokens = count_tokens(response)
+                total_tokens = question_tokens + answer_tokens 
+                if user_id not in user_token_usage:
+                    user_token_usage[user_id] = 0
+                user_token_usage[user_id] += total_tokens
+                self.logger.info(f"[Token] {user_id} used {total_tokens} tokens (Q: {question_tokens}, A: {answer_tokens})")  
+
                 await self.history.save_message(conversation_id, "assistant", response)
                 with open(text_path, "w", encoding="utf-8") as f:
                     f.write(response)

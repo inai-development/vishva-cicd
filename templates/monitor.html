@@ -95,7 +95,23 @@
       {% endfor %}
     </tbody>
   </table>
-
+  <div class="section-title">📊 Token Usage per User</div>
+  <table>
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Tokens Used</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user, tokens in token_usage_per_user.items() %}
+      <tr>
+        <td>{{ user }}</td>
+        <td>{{ tokens }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
   <div class="timestamp">Last updated: {{ request.state.timestamp | default('Now', true) }}</div>
 </body>
 </html>
