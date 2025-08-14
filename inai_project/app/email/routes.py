@@ -21,26 +21,20 @@ from inai_project.app.core.error_handler import (
     UserNotFoundException,
     NoOTPException
 )
-
 router = APIRouter()
-
-# ✅ Database dependency
+# :white_check_mark: Database dependency
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
-# ✅ Request Schemas
+# :white_check_mark: Request Schemas
 class ChangeEmailRequest(BaseModel):
     new_email: EmailStr
-
 class VerifyChangeEmail(BaseModel):
     otp: str
-
-
-# ✅ STEP 1: Request Email Change - Send OTP
+# :white_check_mark: STEP 1: Request Email Change - Send OTP
 @router.post("/request-change-email/")
 async def request_email_change(
     data: ChangeEmailRequest,
@@ -49,18 +43,14 @@ async def request_email_change(
 ):
     if db.query(User).filter(User.email == data.new_email).first():
         raise EmailTakenException("New email is already in use.")
-
     otp = str(random.randint(100000, 999999))
     store_otp(current_user.user_id, data.new_email, otp)
-
     await send_email_otp(data.new_email, otp, purpose="email_change")
     return {
         "status": True,
         "message": f"OTP sent to {data.new_email}"
     }
-
-
-# ✅ STEP 2: Verify OTP and Update Email
+# :white_check_mark: STEP 2: Verify OTP and Update Email
 @router.post("/verify-change-email/")
 def verify_email_change(
     data: VerifyChangeEmail,
@@ -91,10 +81,7 @@ def verify_email_change(
         "status": True,
         "message": "Email changed successfully"
     }
-
-
-
-# ✅ STEP 3: Resend OTP
+# :white_check_mark: STEP 3: Resend OTP
 @router.post("/resend-change-email/")
 async def resend_change_email_otp(
     current_user: User = Depends(get_current_user)
@@ -102,10 +89,8 @@ async def resend_change_email_otp(
     change_data = pending_email_changes.get(current_user.user_id)
     if not change_data:
         raise NoOTPException("No pending email change found.")
-
     new_email = change_data["new_email"]
     expires_at = change_data.get("expires_at")
-
     now = datetime.utcnow()
     if expires_at:
         seconds_remaining = int((expires_at - now).total_seconds())
@@ -115,10 +100,8 @@ async def resend_change_email_otp(
                 "message": f"OTP already sent. Wait {seconds_remaining} seconds.",
                 "seconds_remaining": seconds_remaining
             }
-
     otp = str(random.randint(100000, 999999))
     store_otp(current_user.user_id, new_email, otp)
-
     await send_email_otp(new_email, otp, purpose="email_change")
     return {
         "status": True,

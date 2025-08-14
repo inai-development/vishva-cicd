@@ -18,6 +18,7 @@ from inai_project.database import SessionLocal
 from inai_project.app.signup.temp_store import unverified_users
 from inai_project.app.signup.common_social import handle_social_user
 
+
 router = APIRouter()
 
 def get_db():

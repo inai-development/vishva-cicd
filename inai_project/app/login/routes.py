@@ -68,14 +68,16 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     db.commit()
     return {
         "status": True,
-        "message": f"{login_method.capitalize()} login successful",
-        "user_id": user.user_id,
-        "username": user.username,
-        "email": user.email,
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+        "message": "Login successful",
+        "data": {
+            "user_id": user.user_id,
+            "username": user.username,
+            "email": user.email,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+        },
+}
 
 # :white_check_mark: Forgot Password - Send OTP
 @router.post("/forgot-password/email/", summary="Step 1: Send OTP to email")
@@ -116,9 +118,7 @@ async def verify_otp(data: schemas.OTPVerifyRequest, db: Session = Depends(get_d
     return {"status": True, "message": "OTP verified successfully."}
 
 
-
-
-
+ 
 # ✅ Forgot Password - Reset Password
 @router.post("/forgot-password/reset/")
 def reset_password(data: schemas.PasswordResetRequest, db: Session = Depends(get_db)):

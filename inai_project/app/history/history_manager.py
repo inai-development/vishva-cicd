@@ -33,8 +33,8 @@ class HistoryManager:
 
     async def init_db(self):
         try:
-            # ssl_context = ssl.create_default_context(cafile=r"D:\INAI_Backend_MD\certs\rds-ca.pem")
-            ssl_context = ssl.create_default_context(cafile=r"/home/ubuntu/INAI_Backend/certs/rds-ca.pem")
+            ssl_context = ssl.create_default_context(cafile=r"D:\INAI_Backend_MD\certs\rds-ca.pem")
+            # ssl_context = ssl.create_default_context(cafile=r"/home/ubuntu/INAI_Backend/certs/rds-ca.pem")
             self.pool = await asyncpg.create_pool(
                 dsn=self.db_url,
                 min_size=1,

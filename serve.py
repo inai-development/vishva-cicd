@@ -3,8 +3,12 @@ import sys
 from fastapi import FastAPI
 from dotenv import load_dotenv
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "app")))
-load_dotenv()
+# Add both app and inai_project folders to sys.path
+base_dir = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(os.path.join(base_dir, "app"))
+sys.path.append(os.path.join(base_dir, "inai_project"))
+
+load_dotenv
 
 from app.main import INAIApplication
 from inai_project.main import AuthApplication
@@ -58,6 +62,6 @@ async def shutdown():
 if __name__ == "__main__":
     import uvicorn
     host="0.0.0.0"
-    port=8000
+    port=5000
     logger.info(f"🚀 Starting INAI on http://{host}:{port}")
     uvicorn.run(sio_app, host=host, port=port , reload=True)

@@ -1,6 +1,6 @@
 # app/core/error_handler.py
 from fastapi import Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse  
 from fastapi.exceptions import RequestValidationError, HTTPException
 from starlette.status import (
     HTTP_400_BAD_REQUEST,
@@ -9,13 +9,12 @@ from starlette.status import (
     HTTP_401_UNAUTHORIZED
 )
 
-# ✅ Common response function
+# ✅ Common response function — returns simplified error JSON
 def error_response(message: str, status_code: int):
     return JSONResponse(
         status_code=status_code,
         content={
-            "status": False,  # Convert status code to string
-            "detail": message
+            "error": message
         }
     )
 
@@ -79,6 +78,7 @@ class IncorrectOldPasswordException(Exception):
 class PasswordMismatchException(Exception):
     def __init__(self, message="New passwords do not match"):
         self.message = message
+
 class UnsupportedFileFormatException(Exception):
     def __init__(self, message="Unsupported file format"):
         self.message = message
@@ -95,11 +95,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         full_msg = "Validation error"
     return error_response(full_msg, HTTP_400_BAD_REQUEST)
 
-
-# ✅ Internal Server Error
+# ✅ Internal Server Error Handler for unexpected exceptions
 async def internal_server_error_handler(request: Request, exc: Exception):
+    # You can add logging here if needed
     return error_response("Internal server error. Please try again later.", HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 # ✅ Custom Exception Handlers
 async def user_already_exists_handler(request: Request, exc: UserAlreadyExistsException):
@@ -150,7 +149,9 @@ async def password_mismatch_handler(request: Request, exc: PasswordMismatchExcep
 async def unsupported_file_format_handler(request: Request, exc: UnsupportedFileFormatException):
     return error_response(exc.message, HTTP_400_BAD_REQUEST)
 
-
-# ✅ HTTPException handler
+# ✅ HTTPException handler with safe detail extraction
 async def http_exception_handler(request: Request, exc: HTTPException):
-    return error_response(exc.detail, exc.status_code)
+    detail = exc.detail
+    if isinstance(detail, (list, dict)):
+        detail = str(detail)
+    return error_response(detail, exc.status_code)

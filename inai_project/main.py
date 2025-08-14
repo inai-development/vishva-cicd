@@ -33,6 +33,10 @@ from inai_project.app.logout.routes import router as logout_router
 
 
 # Custom Exceptions and Handlers
+from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
 from inai_project.app.core.error_handler import (
     validation_exception_handler,
     internal_server_error_handler,
@@ -52,6 +56,7 @@ from inai_project.app.core.error_handler import (
     password_mismatch_handler,
     invalid_or_expired_token_handler,
     unsupported_file_format_handler,
+    # Custom Exceptions
     UnsupportedFileFormatException,
     InvalidOrExpiredTokenException,
     InvalidTokenException,
@@ -67,13 +72,27 @@ from inai_project.app.core.error_handler import (
     OTPExpiredException,
     IncorrectOldPasswordException,
     UserNotFoundException,
-    PasswordMismatchException
+    PasswordMismatchException,
+    http_exception_handler,
 )
+from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
+from inai_project.database import get_db
+from inai_project.app.signup.models import User
+
+
+app = FastAPI()
+
+@app.get("/users/")
+def read_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return users
+
 
 # History manager
 from inai_project.app.history.history_manager import HistoryManager
-
-
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from inai_project.app.core import error_handler
 class AuthApplication:
     def __init__(self):
         self.app = FastAPI(
@@ -130,6 +149,9 @@ class AuthApplication:
         self.app.add_exception_handler(PasswordMismatchException, password_mismatch_handler)
         self.app.add_exception_handler(InvalidOrExpiredTokenException, invalid_or_expired_token_handler)
         self.app.add_exception_handler(UnsupportedFileFormatException, unsupported_file_format_handler)
+        self.app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+        self.app.add_exception_handler(error_handler.InvalidTokenException, error_handler.invalid_otp_handler)
+        self.app.add_exception_handler(error_handler.OTPExpiredException, error_handler.otp_expired_handler)
         
 
     def register_routes(self):
