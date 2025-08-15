@@ -1,22 +1,33 @@
-# Use Python 3.11 slim as base
+
+FROM python:3.10-slim
+WORKDIR /app
+COPY . .
+RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && \
+    pip install --upgrade pip && \
+CMD ["python", "main.py"]
+
+# Base image
 FROM python:3.11-slim
 
-# Set working directory
+# Working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first (better caching)
+# Dependencies copy
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app source code
+# Copy app code
 COPY . .
 
-# Run the application
+# Command to run your serve.py
 CMD ["python", "serve.py"]
+
+FROM python:3.10-slim
+WORKDIR /app
+COPY . .
+RUN apt-get update && apt-get install -y ffmpeg libsndfile1 && \
+    pip install --upgrade pip && \
+CMD ["python", "main.py"]
+
