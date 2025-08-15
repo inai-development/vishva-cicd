@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+env:
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    OTHER_KEY: ${{ secrets.OTHER_KEY }}
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
