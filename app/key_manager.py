@@ -3,7 +3,7 @@ from typing import Dict
 from uuid import uuid4
 from threading import Lock
 from datetime import datetime
-from config import Config
+from .config import Config
 from collections import defaultdict
 
 config = Config()
