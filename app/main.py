@@ -28,11 +28,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("MainApp")
 
 
-DB_URL = "your_postgres_url"
-BUCKET_NAME = "your-s3-bucket"
-AWS_ACCESS_KEY = "your-access-key"
-AWS_SECRET_KEY = "your-secret-key"
-REGION = "ap-south-1"
+DB_URL = os.getenv("DATABASE_URL")
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
+REGION = os.getenv("REGION", "ap-south-1") 
+
 app = FastAPI()
 @app.on_event("startup")
 async def startup():
