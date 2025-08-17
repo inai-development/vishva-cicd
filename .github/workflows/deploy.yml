@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-env:
-    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-    OTHER_KEY: ${{ secrets.OTHER_KEY }}
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -35,12 +31,12 @@ jobs:
 
       - name: Build Docker image
         run: |
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-adi
+          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-rock
           docker build -t $IMAGE:latest -t $IMAGE:${{ github.sha }} .
         
       - name: Push Docker image
         run: |
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-adi
+          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-rock
           docker push $IMAGE:latest
           docker push $IMAGE:${{ github.sha }}
   test:
@@ -111,7 +107,7 @@ jobs:
             curl -fsSL -o /home/${{ secrets.EC2_USER }}/rds-ca.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
         
             # 3) Pull image by commit SHA and restart container
-            IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-adi
+            IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-rock
             docker pull $IMAGE:${{ github.sha }}
         
             docker stop inai-app || true
