@@ -31,12 +31,12 @@ jobs:
 
       - name: Build Docker image
         run: |
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-rock
+          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-rocky
           docker build -t $IMAGE:latest -t $IMAGE:${{ github.sha }} .
         
       - name: Push Docker image
         run: |
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-rock
+          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-rocky
           docker push $IMAGE:latest
           docker push $IMAGE:${{ github.sha }}
   test:
@@ -107,7 +107,7 @@ jobs:
             curl -fsSL -o /home/${{ secrets.EC2_USER }}/rds-ca.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
         
             # 3) Pull image by commit SHA and restart container
-            IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-rock
+            IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/inai-voice-assistant-rocky
             docker pull $IMAGE:${{ github.sha }}
         
             docker stop inai-app || true
